@@ -12,8 +12,36 @@ BRANCH="releases/mozilla-$CHANNEL"
 RELEASE_TAG="FIREFOX_60_7_0esr_RELEASE"
 VERSION="60.7.0"
 VERSION_SUFFIX="esr"
+
+# Internal variables
 LOCALE_FILE="firefox-$VERSION/browser/locales/l10n-changesets.json"
 SOURCE_TARBALL="firefox-$VERSION$VERSION_SUFFIX.source.tar.xz"
+FTP_URL="https://ftp.mozilla.org/pub/firefox/releases/$VERSION$VERSION_SUFFIX/source"
+# Exit script on CTRL+C
+trap "exit" INT
+
+function check_tarball_source () {
+  TARBALL=$1
+  # Print out what is going to be done:
+  if [ -e $TARBALL ]; then
+      echo "Reuse existing file"
+  elif wget --spider $FTP_URL/$TARBALL 2> /dev/null; then
+      echo "Download file"
+  else
+      echo "Mercurial checkout"
+  fi
+}
+
+function ask_cont_abort_question() {
+  while true; do
+    read -p "$1 [(c)ontinue/(a)bort] " ca
+    case $ca in
+        [Cc]* ) return 1 ;;
+        [Aa]* ) return 0 ;;
+        * ) echo "Please answer c or a.";;
+    esac
+  done
+}
 
 # check required tools
 test -x /usr/bin/hg || ( echo "hg missing: execute zypper in mercurial"; exit 5 )
@@ -25,6 +53,12 @@ pixz -h > /dev/null 2>&1
 if (($? != 127)); then
   compression='-Ipixz'
 fi
+
+# Check what is going to be done and ask for consent
+for ff in $SOURCE_TARBALL $SOURCE_TARBALL.asc; do
+  printf "%-40s: %s\n" $ff "$(check_tarball_source $ff)"
+done
+$(ask_cont_abort_question "Is this ok?") && exit 0
 
 # Try to download tar-ball from officiall mozilla-mirror
 if [ ! -e $SOURCE_TARBALL ]; then
