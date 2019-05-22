@@ -105,10 +105,10 @@ if (($? != 127)); then
 fi
 
 if locales_unchanged; then
-  printf "%-40s: can be copied\n" "locales"
+  printf "%-40s: Did not change. Skipping.\n" "locales"
   LOCALES_CHANGED=0
 else
-  printf "%-40s: changed\n" "locales"
+  printf "%-40s: Need to download.\n" "locales"
   LOCALES_CHANGED=1
 fi
 # Check what is going to be done and ask for consent
