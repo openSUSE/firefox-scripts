@@ -36,16 +36,23 @@ function ask_cont_abort_question() {
   while true; do
     read -p "$1 [(c)ontinue/(a)bort] " ca
     case $ca in
-        [Cc]* ) return 1 ;;
-        [Aa]* ) return 0 ;;
+        [Cc]* ) return 0 ;;
+        [Aa]* ) return 1 ;;
         * ) echo "Please answer c or a.";;
     esac
   done
 }
 
+function check_for_binary() {
+  if ! test -x $1; then
+    echo "$1 is missing: execute zypper in $2"
+    exit 5
+  fi
+}
+
 # check required tools
-test -x /usr/bin/hg || ( echo "hg missing: execute zypper in mercurial"; exit 5 )
-test -x /usr/bin/jq || ( echo "jq missing: execute zypper in jq"; exit 5 )
+check_for_binary /usr/bin/hg "mercurial"
+check_for_binary /usr/bin/jq "jq"
 
 # use parallel compression, if available
 compression='-J'
@@ -58,7 +65,7 @@ fi
 for ff in $SOURCE_TARBALL $SOURCE_TARBALL.asc; do
   printf "%-40s: %s\n" $ff "$(check_tarball_source $ff)"
 done
-$(ask_cont_abort_question "Is this ok?") && exit 0
+$(ask_cont_abort_question "Is this ok?") || exit 0
 
 # Try to download tar-ball from officiall mozilla-mirror
 if [ ! -e $SOURCE_TARBALL ]; then
