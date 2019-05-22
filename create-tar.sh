@@ -10,6 +10,7 @@
 CHANNEL="esr60"
 BRANCH="releases/mozilla-$CHANNEL"
 RELEASE_TAG="FIREFOX_60_7_0esr_RELEASE"
+PREV_VERSION="60.6.3"
 VERSION="60.7.0"
 VERSION_SUFFIX="esr"
 
@@ -17,6 +18,7 @@ VERSION_SUFFIX="esr"
 LOCALE_FILE="firefox-$VERSION/browser/locales/l10n-changesets.json"
 SOURCE_TARBALL="firefox-$VERSION$VERSION_SUFFIX.source.tar.xz"
 FTP_URL="https://ftp.mozilla.org/pub/firefox/releases/$VERSION$VERSION_SUFFIX/source"
+LOCALES_URL="https://product-details.mozilla.org/1.0/l10n/Firefox"
 # Exit script on CTRL+C
 trap "exit" INT
 
@@ -50,9 +52,50 @@ function check_for_binary() {
   fi
 }
 
+function locales_get() {
+  TMP_VERSION="$1"
+  URL_TO_CHECK="${LOCALES_URL}-${TMP_VERSION}${VERSION_SUFFIX}"
+
+  LAST_FOUND=""
+  # Unfortunately, locales-files are not associated to releases, but to builds.
+  # And since we don't know which build was the final build, we go from 1 to
+  # the last we find and try to find the latest one that exists.
+  # Error only if not even the first one exists
+  for BUILD_ID in $(seq 1 9); do
+    FINAL_URL="${URL_TO_CHECK}-build${BUILD_ID}.json"
+    if wget --quiet --spider "$FINAL_URL"; then
+      LAST_FOUND="$FINAL_URL"
+    elif [ $BUILD_ID -gt 1 ]; then
+      echo "$LAST_FOUND"
+      return 0
+    else
+      echo "Error: Could not find locales-file (json) for Firefox $TMP_VERSION$VERSION_SUFFIX !"  1>&2
+      return 1
+    fi
+  done
+}
+
+function locales_parse() {
+  URL="$1"
+  curl -s "$URL" | python -c "import json; import sys; \
+             print('\n'.join(['{} {}'.format(key, value['changeset']) \
+                for key, value in sorted(json.load(sys.stdin)['locales'].items())]));"
+}
+
+function locales_unchanged() {
+  prev_url=$(locales_get "$PREV_VERSION") || exit 1
+  curr_url=$(locales_get "$VERSION")      || exit 1
+
+  prev_content=$(locales_parse "$prev_url") || exit 1
+  curr_content=$(locales_parse "$curr_url") || exit 1
+
+  diff -y --suppress-common-lines -d <(echo "$prev_content") <(echo "$curr_content")
+}
+
 # check required tools
 check_for_binary /usr/bin/hg "mercurial"
 check_for_binary /usr/bin/jq "jq"
+which python > /dev/null || exit 1
 
 # use parallel compression, if available
 compression='-J'
@@ -61,10 +104,18 @@ if (($? != 127)); then
   compression='-Ipixz'
 fi
 
+if locales_unchanged; then
+  printf "%-40s: can be copied\n" "locales"
+  LOCALES_CHANGED=0
+else
+  printf "%-40s: changed\n" "locales"
+  LOCALES_CHANGED=1
+fi
 # Check what is going to be done and ask for consent
 for ff in $SOURCE_TARBALL $SOURCE_TARBALL.asc; do
   printf "%-40s: %s\n" $ff "$(check_tarball_source $ff)"
 done
+
 $(ask_cont_abort_question "Is this ok?") || exit 0
 
 # Try to download tar-ball from officiall mozilla-mirror
@@ -120,25 +171,27 @@ else
   echo "creating archive..."
   tar $compression -cf firefox-$VERSION$VERSION_SUFFIX.source.tar.xz --exclude=.hgtags --exclude=.hgignore --exclude=.hg --exclude=CVS firefox-$VERSION
 fi
-
-# l10n
-echo "fetching locales..."
-test ! -d l10n && mkdir l10n
-jq -r 'to_entries[]| "\(.key) \(.value|.revision)"' $LOCALE_FILE | \
-  while read locale changeset ; do
-    case $locale in
-      ja-JP-mac|en-US)
-        ;;
-      *)
-        echo "reading changeset information for $locale"
-        echo "fetching $locale changeset $changeset ..."
-        hg clone "http://hg.mozilla.org/l10n-central/$locale" "l10n/$locale"
-        [ "$RELEASE_TAG" == "default" ] || hg -R "l10n/$locale" up -C -r "$changeset"
-        ;;
-    esac
-  done
-echo "creating l10n archive..."
-tar $compression -cf l10n-$VERSION$VERSION_SUFFIX.tar.xz --exclude=.hgtags --exclude=.hgignore --exclude=.hg l10n
+  
+if [ $LOCALES_CHANGED -ne 0 ]; then
+  # l10n
+  echo "fetching locales..."
+  test ! -d l10n && mkdir l10n
+  jq -r 'to_entries[]| "\(.key) \(.value|.revision)"' $LOCALE_FILE | \
+    while read locale changeset ; do
+      case $locale in
+        ja-JP-mac|en-US)
+          ;;
+        *)
+          echo "reading changeset information for $locale"
+          echo "fetching $locale changeset $changeset ..."
+          hg clone "http://hg.mozilla.org/l10n-central/$locale" "l10n/$locale"
+          [ "$RELEASE_TAG" == "default" ] || hg -R "l10n/$locale" up -C -r "$changeset"
+          ;;
+      esac
+    done
+  echo "creating l10n archive..."
+  tar $compression -cf l10n-$VERSION$VERSION_SUFFIX.tar.xz --exclude=.hgtags --exclude=.hgignore --exclude=.hg l10n
+fi
 
 # compare-locales
 echo "creating compare-locales"
