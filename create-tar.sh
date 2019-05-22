@@ -13,6 +13,7 @@ RELEASE_TAG="FIREFOX_60_7_0esr_RELEASE"
 VERSION="60.7.0"
 VERSION_SUFFIX="esr"
 LOCALE_FILE="firefox-$VERSION/browser/locales/l10n-changesets.json"
+SOURCE_TARBALL="firefox-$VERSION$VERSION_SUFFIX.source.tar.xz"
 
 # check required tools
 test -x /usr/bin/hg || ( echo "hg missing: execute zypper in mercurial"; exit 5 )
@@ -25,26 +26,38 @@ if (($? != 127)); then
   compression='-Ipixz'
 fi
 
+# Try to download tar-ball from officiall mozilla-mirror
+if [ ! -e $SOURCE_TARBALL ]; then
+  wget https://ftp.mozilla.org/pub/firefox/releases/$VERSION$VERSION_SUFFIX/source/$SOURCE_TARBALL
+fi
+# including signature
+if [ ! -e $SOURCE_TARBALL.asc ]; then
+  wget https://ftp.mozilla.org/pub/firefox/releases/$VERSION$VERSION_SUFFIX/source/$SOURCE_TARBALL.asc
+fi
+
 # we might have an upstream archive already and can skip the checkout
-if [ -e firefox-$VERSION$VERSION_SUFFIX.source.tar.xz ]; then
+if [ -e $SOURCE_TARBALL ]; then
   echo "skip firefox checkout and use available archive"
   # still need to extract the locale information from the archive
   echo "extract locale changesets"
-  tar -xf firefox-$VERSION$VERSION_SUFFIX.source.tar.xz $LOCALE_FILE
+  tar -xf $SOURCE_TARBALL $LOCALE_FILE
 else
+  # We are working on a version that is not yet published on the mozilla mirror
+  # so we have to actually check out the repo
+
   # mozilla
   if [ -d firefox-$VERSION ]; then
-    pushd firefox-$VERSION
+    pushd firefox-$VERSION || exit 1
     _repourl=$(hg paths)
     case "$_repourl" in
       *$BRANCH*)
         echo "updating previous tree"
         hg pull
-        popd
+        popd || exit 1
         ;;
       * )
         echo "removing obsolete tree"
-        popd
+        popd || exit 1
         rm -rf firefox-$VERSION
         ;;
     esac
@@ -53,7 +66,7 @@ else
     echo "cloning new $BRANCH..."
     hg clone http://hg.mozilla.org/$BRANCH firefox-$VERSION
   fi
-  pushd firefox-$VERSION
+  pushd firefox-$VERSION || exit 1
   hg update --check
   [ "$RELEASE_TAG" == "default" ] || hg update -r $RELEASE_TAG
   # get repo and source stamp
@@ -61,7 +74,7 @@ else
   hg -R . parent --template="{node|short}\n" >> ../source-stamp.txt
   echo -n "REPO=" >> ../source-stamp.txt
   hg showconfig paths.default 2>/dev/null | head -n1 | sed -e "s/^ssh:/http:/" >> ../source-stamp.txt
-  popd
+  popd || exit 1
 
   echo "creating archive..."
   tar $compression -cf firefox-$VERSION$VERSION_SUFFIX.source.tar.xz --exclude=.hgtags --exclude=.hgignore --exclude=.hg --exclude=CVS firefox-$VERSION
@@ -78,8 +91,8 @@ jq -r 'to_entries[]| "\(.key) \(.value|.revision)"' $LOCALE_FILE | \
       *)
         echo "reading changeset information for $locale"
         echo "fetching $locale changeset $changeset ..."
-        hg clone http://hg.mozilla.org/l10n-central/$locale l10n/$locale
-        [ "$RELEASE_TAG" == "default" ] || hg -R l10n/$locale up -C -r $changeset
+        hg clone "http://hg.mozilla.org/l10n-central/$locale" "l10n/$locale"
+        [ "$RELEASE_TAG" == "default" ] || hg -R "l10n/$locale" up -C -r "$changeset"
         ;;
     esac
   done
