@@ -26,11 +26,11 @@ except Exception as e:
 
 mfsa_yaml = yaml.load(mfsa_data)
 
-mfsa = string.replace(mfsa_data[3:string.find(mfsa_data, '.')], 'mfsa', 'MFSA ')
+mfsa = mfsa_data[3:mfsa_data.find('.')].replace('mfsa', 'MFSA ')
 
 wrapBMO = textwrap.TextWrapper(
-        initial_indent = "    ",
-        subsequent_indent = "     ",
+        initial_indent = "  ",
+        subsequent_indent = "    ",
         width = 65)
 
 wrapCHLOG = textwrap.TextWrapper(
@@ -38,7 +38,8 @@ wrapCHLOG = textwrap.TextWrapper(
         subsequent_indent = "    ",
         width = 65)
 
-print("- update to {0} (bsc#{1})".format(mfsa_yaml['fixed_in'][0], bsc))
+print("- Mozilla Firefox {0}".format(mfsa_yaml['fixed_in'][0]))
+print("  {0} (bsc#{1})".format(mfsa, bsc))
 for a in mfsa_yaml['advisories']:
     cve = a
     bmos = []
@@ -46,8 +47,7 @@ for a in mfsa_yaml['advisories']:
         bmos += str(b['url']).split(', ')
     bmos.sort()
     bmos = map(lambda b: "bmo#" + b, bmos)
-    print("  * " + mfsa + "/" + cve)
-    print(wrapBMO.fill("({0})".format(", ".join(bmos))))
+    print(wrapBMO.fill("* {0} ({1})".format(cve, ", ".join(bmos))))
     print(wrapCHLOG.fill(mfsa_yaml['advisories'][a]['title']))
 
 
