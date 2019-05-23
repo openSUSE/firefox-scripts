@@ -24,7 +24,7 @@ except Exception as e:
     exit(1)
 
 
-mfsa_yaml = yaml.load(mfsa_data)
+mfsa_yaml = yaml.full_load(mfsa_data)
 
 mfsa = mfsa_data[3:mfsa_data.find('.')].replace('mfsa', 'MFSA ')
 
