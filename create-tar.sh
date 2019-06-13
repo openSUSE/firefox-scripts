@@ -11,6 +11,7 @@ CHANNEL="esr60"
 BRANCH="releases/mozilla-$CHANNEL"
 RELEASE_TAG="FIREFOX_60_7_0esr_RELEASE"
 PREV_VERSION="60.6.3"
+PREV_VERSION_SUFFIX="esr"
 VERSION="60.7.0"
 VERSION_SUFFIX="esr"
 
@@ -54,7 +55,7 @@ function check_for_binary() {
 
 function locales_get() {
   TMP_VERSION="$1"
-  URL_TO_CHECK="${LOCALES_URL}-${TMP_VERSION}${VERSION_SUFFIX}"
+  URL_TO_CHECK="${LOCALES_URL}-${TMP_VERSION}"
 
   LAST_FOUND=""
   # Unfortunately, locales-files are not associated to releases, but to builds.
@@ -69,7 +70,7 @@ function locales_get() {
       echo "$LAST_FOUND"
       return 0
     else
-      echo "Error: Could not find locales-file (json) for Firefox $TMP_VERSION$VERSION_SUFFIX !"  1>&2
+      echo "Error: Could not find locales-file (json) for Firefox $TMP_VERSION !"  1>&2
       return 1
     fi
   done
@@ -83,8 +84,8 @@ function locales_parse() {
 }
 
 function locales_unchanged() {
-  prev_url=$(locales_get "$PREV_VERSION") || exit 1
-  curr_url=$(locales_get "$VERSION")      || exit 1
+  prev_url=$(locales_get "$PREV_VERSION$PREV_VERSION_SUFFIX") || exit 1
+  curr_url=$(locales_get "$VERSION$VERSION_SUFFIX")      || exit 1
 
   prev_content=$(locales_parse "$prev_url") || exit 1
   curr_content=$(locales_parse "$curr_url") || exit 1
