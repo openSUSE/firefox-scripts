@@ -1,0 +1,93 @@
+#!/bin/bash
+
+DEFAULT_FF_SYNC_TARGET="/your/git/path/here"
+
+function print_usage () {
+    echo "Usage: $0 [PATH]"
+    echo "PATH: Optional path to sync-target."
+    echo "      If not given \$FF_SYNC_TARGET is used"
+}
+
+function ask_cont_abort_question() {
+  while true; do
+    read -p "$1 [(c)ontinue/(a)bort] " ca
+    case $ca in
+        [Cc]* ) return 0 ;;
+        [Aa]* ) return 1 ;;
+        * ) echo "Please answer c or a.";;
+    esac
+  done
+}
+
+function sync_ff () {
+    rm "$FF_SYNC_TARGET/*.patch"
+    cp *.patch "$FF_SYNC_TARGET/"
+    # Copy all relevant files that are not patches or tarballs to /Firefox
+    for f in `find . -maxdepth 1 -not -name "*.patch" -not -name "*.tar.xz*" -not -name "create-tar.sh" -not -name ".osc" -not -name . -not -name "_*"`; do
+        cp "$f" "$FF_SYNC_TARGET/Firefox/"
+    done
+}
+
+
+if [ $# -gt 1 ]; then
+    print_usage
+    exit 1
+fi
+
+if [ $# -eq 1 ]; then
+    if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+        print_usage
+        exit 0
+    fi
+
+    FF_SYNC_TARGET="$1"
+else
+    # If not set from outside, use as default the path given here
+    : "${FF_SYNC_TARGET:=$DEFAULT_FF_SYNC_TARGET}"
+fi
+
+if [ ! -d "$FF_SYNC_TARGET" ]; then
+    echo ""
+    echo "Target path $FF_SYNC_TARGET does not exist! Please specifiy an existing path"
+    exit 1
+fi
+
+
+if [ ! -d "$FF_SYNC_TARGET/.git" ]; then
+    echo ""
+    echo "Target path $FF_SYNC_TARGET does not seem to be a git-repo, as it should be!"
+    $(ask_cont_abort_question "Do you want to continue?") || exit 0
+    IS_GIT_REPO=0
+else
+    IS_GIT_REPO=1
+fi
+
+
+pushd "$FF_SYNC_TARGET" > /dev/null || exit 1
+
+if [ $IS_GIT_REPO -eq 1 ]; then
+    if [ ! -z "$(git status --porcelain)" ]; then 
+        echo ""
+        echo "Target git-repo is not clean! You may loose your uncommited changes, if you continue!"
+        echo "Only proceed if you know what you are doing."
+        $(ask_cont_abort_question "Do you want to continue?") || exit 0
+    fi
+
+    branch_name=$(git symbolic-ref -q HEAD)
+    branch_name=${branch_name##refs/heads/}
+    branch_name=${branch_name:-DETACHED_HEAD}
+fi
+
+popd > /dev/null || exit 1
+
+echo ""
+if [ $IS_GIT_REPO -eq 1 ]; then
+    echo "Going to sync to $FF_SYNC_TARGET which is on branch $branch_name"
+else
+    echo "Going to sync to $FF_SYNC_TARGET which is NOT a git-repo"
+fi
+echo "(Sync involves deleting TARGET/*.patch)"
+
+$(ask_cont_abort_question "Do you want to continue?") || exit 0
+
+sync_ff

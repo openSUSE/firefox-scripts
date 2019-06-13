@@ -17,3 +17,20 @@ Queries MFSA (Mozilla Foundation Security Advisory) and parses them into the cha
 2. Search which yaml-file(s) is relevant in the release notes
 3. Search SUSE bugzilla-ID for updating Firefox with security vulns.
 4. mfsa-yml.py foundation-security-advisories/announce/2017/mfsa<whichever you need>.yml <bugzilla ID>
+
+## sync\_ff
+Program to sync an OBS repo with the github-repo
+
+This will delete all `*.patch`-files in the github-repo and copy over the new ones (in order to notice deleted patches).
+It will also copy all relevant Firefox-files to github-repo/Firefox/ (excluding tarballs, scripts and the like)
+
+### Usage
+1. Put or better yet link sync\_ff in a directory in your $PATH
+2. Go into your OBS-repo you want to sync
+3. Specify github-repo path (your local checkout)
+    a. Either by giving it directly: `sync_ff /your/path/here`
+    b. By hardcoding it into `sync_ff` (`DEFAULT_FF_SYNC_TARGET`)
+    c. By giving it via env-variable: `FF_SYNC_TARGET=/tmp sync_ff`
+    d. By giving it via env-variable from your `.bashrc`
+
+
