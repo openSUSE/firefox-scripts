@@ -28,9 +28,9 @@ It will also copy all relevant Firefox-files to github-repo/Firefox/ (excluding 
 1. Put or better yet link sync\_ff in a directory in your $PATH
 2. Go into your OBS-repo you want to sync
 3. Specify github-repo path (your local checkout)
-    a. Either by giving it directly: `sync_ff /your/path/here`
-    b. By hardcoding it into `sync_ff` (`DEFAULT_FF_SYNC_TARGET`)
-    c. By giving it via env-variable: `FF_SYNC_TARGET=/tmp sync_ff`
-    d. By giving it via env-variable from your `.bashrc`
+    1. Either by giving it directly: `sync_ff /your/path/here`
+    2. By hardcoding it into `sync_ff` (`DEFAULT_FF_SYNC_TARGET`)
+    3. By giving it via env-variable: `FF_SYNC_TARGET=/tmp sync_ff`
+    4. By giving it via env-variable from your `.bashrc`
 
 
