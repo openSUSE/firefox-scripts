@@ -1,7 +1,5 @@
 #!/bin/bash
 
-DEFAULT_FF_SYNC_TARGET="/your/git/path/here"
-
 function print_usage () {
     echo "Usage: $0 [PATH]"
     echo "PATH: Optional path to sync-target."
@@ -41,9 +39,13 @@ if [ $# -eq 1 ]; then
     fi
 
     FF_SYNC_TARGET="$1"
-else
-    # If not set from outside, use as default the path given here
-    : "${FF_SYNC_TARGET:=$DEFAULT_FF_SYNC_TARGET}"
+fi
+
+if [[ -z "$FF_SYNC_TARGET" ]]; then
+    # No FF_SYNC_TARGET is given!
+    echo ""
+    echo "No target path specified! Please give it as a commandline argument or define \$FF_SYNC_TARGET"
+    exit 1
 fi
 
 if [ ! -d "$FF_SYNC_TARGET" ]; then
