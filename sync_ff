@@ -1,5 +1,10 @@
 #!/bin/bash
 
+FIREFOX_DIR="firefox"
+THUNDERBIRD_DIR="thunderbird"
+NSS_DIR="nss"
+NSPR_DIR="nspr"
+
 function print_usage () {
     echo "Usage: $0 [PATH]"
     echo "PATH: Optional path to sync-target."
@@ -17,13 +22,39 @@ function ask_cont_abort_question() {
   done
 }
 
-function sync_ff () {
-    rm "$FF_SYNC_TARGET/*.patch"
-    cp *.patch "$FF_SYNC_TARGET/"
-    # Copy all relevant files that are not patches or tarballs to /Firefox
-    for f in `find . -maxdepth 1 -not -name "*.patch" -not -name "*.tar.xz*" -not -name "create-tar.sh" -not -name ".osc" -not -name . -not -name "_*"`; do
-        cp "$f" "$FF_SYNC_TARGET/Firefox/"
+function get_subdir() {
+    if [ -f "./MozillaFirefox.spec" ]; then
+        echo "$FIREFOX_DIR"
+    elif [ -f "./MozillaThunderbird.spec" ]; then
+        echo "$THUNDERBIRD_DIR"
+    elif [ -f "./mozilla-nss.spec" ]; then
+        echo "$NSS_DIR"
+    elif [ -f "./mozilla-nspr.spec" ]; then
+        echo "$NSPR_DIR"
+    else
+        # Error-case!
+        echo ""
+    fi
+}
+
+function sync_ff_tb () {
+    SUBDIR="$1"
+    rm "$FF_SYNC_TARGET"/*.patch
+    rm "$FF_SYNC_TARGET/$SUBDIR"/*.patch
+
+    cp mozilla*.patch "$FF_SYNC_TARGET/"
+    # Copy all relevant files that are not patches or tarballs to /firefox
+    for f in `find . -maxdepth 1 -not -name "mozilla*.patch" -not -name "*.tar.xz*" -not -name "create-tar.sh" -not -name ".osc" -not -name . -not -name "_*"`; do
+        cp "$f" "$FF_SYNC_TARGET/$SUBDIR/"
     done
+
+    # Create new symlinks in order to notice removed patches
+    pushd "$FF_SYNC_TARGET/$SUBDIR" > /dev/null || exit 1
+    for ff in ../*.patch; do
+        ln -s $ff .
+    done
+    popd > /dev/null || exit 1
+
 }
 
 
@@ -41,7 +72,16 @@ if [ $# -eq 1 ]; then
     FF_SYNC_TARGET="$1"
 fi
 
-if [[ -z "$FF_SYNC_TARGET" ]]; then
+GIT_SUBDIR=`get_subdir`
+
+if [ -z "$GIT_SUBDIR" ]; then
+    echo ""
+    echo "Your current working directory is not a valid osc-dir!"
+    echo "This is only working for MozillaFirefox, MozillaThunderbird, mozilla-nss, mozilla-nspr"
+    exit 1
+fi
+
+if [ -z "$FF_SYNC_TARGET" ]; then
     # No FF_SYNC_TARGET is given!
     echo ""
     echo "No target path specified! Please give it as a commandline argument or define \$FF_SYNC_TARGET"
@@ -54,7 +94,6 @@ if [ ! -d "$FF_SYNC_TARGET" ]; then
     exit 1
 fi
 
-
 if [ ! -d "$FF_SYNC_TARGET/.git" ]; then
     echo ""
     echo "Target path $FF_SYNC_TARGET does not seem to be a git-repo, as it should be!"
@@ -63,7 +102,6 @@ if [ ! -d "$FF_SYNC_TARGET/.git" ]; then
 else
     IS_GIT_REPO=1
 fi
-
 
 pushd "$FF_SYNC_TARGET" > /dev/null || exit 1
 
@@ -92,4 +130,6 @@ echo "(Sync involves deleting TARGET/*.patch)"
 
 $(ask_cont_abort_question "Do you want to continue?") || exit 0
 
-sync_ff
+if [ "$GIT_SUBDIR" = "$FIREFOX_DIR" ] || [ "$GIT_SUBDIR" = "$THUNDERBIRD_DIR" ]; then
+    sync_ff_tb "$GIT_SUBDIR"
+fi
