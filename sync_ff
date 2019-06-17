@@ -13,7 +13,7 @@ function print_usage () {
 
 function ask_cont_abort_question() {
   while true; do
-    read -p "$1 [(c)ontinue/(a)bort] " ca
+    read -r -p "$1 [(c)ontinue/(a)bort] " ca
     case $ca in
         [Cc]* ) return 0 ;;
         [Aa]* ) return 1 ;;
@@ -44,14 +44,14 @@ function sync_ff_tb () {
 
     cp mozilla*.patch "$FF_SYNC_TARGET/"
     # Copy all relevant files that are not patches or tarballs to /firefox
-    for f in `find . -maxdepth 1 -not -name "mozilla*.patch" -not -name "*.tar.xz*" -not -name "create-tar.sh" -not -name ".osc" -not -name . -not -name "_*"`; do
+    for f in $(find . -maxdepth 1 -not -name "mozilla*.patch" -not -name "*.tar.xz*" -not -name "create-tar.sh" -not -name ".osc" -not -name . -not -name "_*"); do
         cp "$f" "$FF_SYNC_TARGET/$SUBDIR/"
     done
 
     # Create new symlinks in order to notice removed patches
     pushd "$FF_SYNC_TARGET/$SUBDIR" > /dev/null || exit 1
     for ff in ../*.patch; do
-        ln -s $ff .
+        ln -s "$ff" .
     done
     popd > /dev/null || exit 1
 
@@ -72,7 +72,7 @@ if [ $# -eq 1 ]; then
     FF_SYNC_TARGET="$1"
 fi
 
-GIT_SUBDIR=`get_subdir`
+GIT_SUBDIR=$(get_subdir)
 
 if [ -z "$GIT_SUBDIR" ]; then
     echo ""
@@ -97,7 +97,7 @@ fi
 if [ ! -d "$FF_SYNC_TARGET/.git" ]; then
     echo ""
     echo "Target path $FF_SYNC_TARGET does not seem to be a git-repo, as it should be!"
-    $(ask_cont_abort_question "Do you want to continue?") || exit 0
+    ask_cont_abort_question "Do you want to continue?" || exit 0
     IS_GIT_REPO=0
 else
     IS_GIT_REPO=1
@@ -106,11 +106,11 @@ fi
 pushd "$FF_SYNC_TARGET" > /dev/null || exit 1
 
 if [ $IS_GIT_REPO -eq 1 ]; then
-    if [ ! -z "$(git status --porcelain)" ]; then 
+    if [ -n "$(git status --porcelain)" ]; then 
         echo ""
         echo "Target git-repo is not clean! You may loose your uncommited changes, if you continue!"
         echo "Only proceed if you know what you are doing."
-        $(ask_cont_abort_question "Do you want to continue?") || exit 0
+        ask_cont_abort_question "Do you want to continue?" || exit 0
     fi
 
     branch_name=$(git symbolic-ref -q HEAD)
@@ -128,7 +128,7 @@ else
 fi
 echo "(Sync involves deleting TARGET/*.patch)"
 
-$(ask_cont_abort_question "Do you want to continue?") || exit 0
+ask_cont_abort_question "Do you want to continue?" || exit 0
 
 if [ "$GIT_SUBDIR" = "$FIREFOX_DIR" ] || [ "$GIT_SUBDIR" = "$THUNDERBIRD_DIR" ]; then
     sync_ff_tb "$GIT_SUBDIR"
