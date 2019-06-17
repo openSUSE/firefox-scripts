@@ -37,6 +37,17 @@ function get_subdir() {
     fi
 }
 
+function sync_nss_nspr () {
+    SUBDIR="$1"
+    rm "$FF_SYNC_TARGET/$SUBDIR"/*.patch
+
+    # Copy all relevant files that are not patches or tarballs to /firefox
+    for f in $(find . -maxdepth 1 -not -name "*.tar.*" -not -name ".osc" -not -name . -not -name "_*"); do
+        cp "$f" "$FF_SYNC_TARGET/$SUBDIR/"
+    done
+
+}
+
 function sync_ff_tb () {
     SUBDIR="$1"
     rm "$FF_SYNC_TARGET"/*.patch
@@ -44,7 +55,7 @@ function sync_ff_tb () {
 
     cp mozilla*.patch "$FF_SYNC_TARGET/"
     # Copy all relevant files that are not patches or tarballs to /firefox
-    for f in $(find . -maxdepth 1 -not -name "mozilla*.patch" -not -name "*.tar.xz*" -not -name "create-tar.sh" -not -name ".osc" -not -name . -not -name "_*"); do
+    for f in $(find . -maxdepth 1 -not -name "mozilla*.patch" -not -name "*.tar.*" -not -name "create-tar.sh" -not -name ".osc" -not -name . -not -name "_*"); do
         cp "$f" "$FF_SYNC_TARGET/$SUBDIR/"
     done
 
@@ -132,4 +143,6 @@ ask_cont_abort_question "Do you want to continue?" || exit 0
 
 if [ "$GIT_SUBDIR" = "$FIREFOX_DIR" ] || [ "$GIT_SUBDIR" = "$THUNDERBIRD_DIR" ]; then
     sync_ff_tb "$GIT_SUBDIR"
+else
+    sync_nss_nspr "$GIT_SUBDIR"
 fi
