@@ -7,19 +7,28 @@
 #
 # Node ID: 64ee63facd4ff96b3e8590cff559d7e97ac6b061
 
+PRODUCT="firefox"
 CHANNEL="esr60"
-BRANCH="releases/mozilla-$CHANNEL"
-RELEASE_TAG="FIREFOX_60_7_0esr_RELEASE"
+FF_RELEASE_TAG=""
+TB_RELEASE_TAG=""
 PREV_VERSION="60.6.3"
 PREV_VERSION_SUFFIX="esr"
 VERSION="60.7.0"
 VERSION_SUFFIX="esr"
 
 # Internal variables
-LOCALE_FILE="firefox-$VERSION/browser/locales/l10n-changesets.json"
-SOURCE_TARBALL="firefox-$VERSION$VERSION_SUFFIX.source.tar.xz"
-FTP_URL="https://ftp.mozilla.org/pub/firefox/releases/$VERSION$VERSION_SUFFIX/source"
-LOCALES_URL="https://product-details.mozilla.org/1.0/l10n/Firefox"
+BRANCH="releases/mozilla-$CHANNEL"
+if [ "$PRODUCT" = "firefox" ]; then
+  LOCALE_FILE="firefox-$VERSION/browser/locales/l10n-changesets.json"
+else
+  LOCALE_FILE="thunderbird-$VERSION/comm/mail/locales/l10n-changesets.json"
+fi
+
+SOURCE_TARBALL="$PRODUCT-$VERSION$VERSION_SUFFIX.source.tar.xz"
+FTP_URL="https://ftp.mozilla.org/pub/$PRODUCT/releases/$VERSION$VERSION_SUFFIX/source"
+# Make first letter of PRODCUT upper case
+PRODUCT_CAP="${PRODUCT^}"
+LOCALES_URL="https://product-details.mozilla.org/1.0/l10n/$PRODUCT_CAP"
 # Exit script on CTRL+C
 trap "exit" INT
 
@@ -105,7 +114,10 @@ if (($? != 127)); then
   compression='-Ipixz'
 fi
 
-if locales_unchanged; then
+# TODO: Thunderbird has usually "default" as locale entry. 
+# There we probably need to double-check Firefox-locals
+# For now, just download every time for Thunderbird
+if [ "$PRODUCT" = "firefox" ] && locales_unchanged; then
   printf "%-40s: Did not change. Skipping.\n" "locales"
   LOCALES_CHANGED=0
 else
@@ -121,16 +133,16 @@ $(ask_cont_abort_question "Is this ok?") || exit 0
 
 # Try to download tar-ball from officiall mozilla-mirror
 if [ ! -e $SOURCE_TARBALL ]; then
-  wget https://ftp.mozilla.org/pub/firefox/releases/$VERSION$VERSION_SUFFIX/source/$SOURCE_TARBALL
+  wget https://ftp.mozilla.org/pub/$PRODUCT/releases/$VERSION$VERSION_SUFFIX/source/$SOURCE_TARBALL
 fi
 # including signature
 if [ ! -e $SOURCE_TARBALL.asc ]; then
-  wget https://ftp.mozilla.org/pub/firefox/releases/$VERSION$VERSION_SUFFIX/source/$SOURCE_TARBALL.asc
+  wget https://ftp.mozilla.org/pub/$PRODUCT/releases/$VERSION$VERSION_SUFFIX/source/$SOURCE_TARBALL.asc
 fi
 
 # we might have an upstream archive already and can skip the checkout
 if [ -e $SOURCE_TARBALL ]; then
-  echo "skip firefox checkout and use available archive"
+  echo "skip $PRODUCT checkout and use available archive"
   # still need to extract the locale information from the archive
   echo "extract locale changesets"
   tar -xf $SOURCE_TARBALL $LOCALE_FILE
@@ -139,8 +151,8 @@ else
   # so we have to actually check out the repo
 
   # mozilla
-  if [ -d firefox-$VERSION ]; then
-    pushd firefox-$VERSION || exit 1
+  if [ -d $PRODUCT-$VERSION ]; then
+    pushd $PRODUCT-$VERSION || exit 1
     _repourl=$(hg paths)
     case "$_repourl" in
       *$BRANCH*)
@@ -151,26 +163,36 @@ else
       * )
         echo "removing obsolete tree"
         popd || exit 1
-        rm -rf firefox-$VERSION
+        rm -rf $PRODUCT-$VERSION
         ;;
     esac
   fi
-  if [ ! -d firefox-$VERSION ]; then
+  if [ ! -d $PRODUCT-$VERSION ]; then
     echo "cloning new $BRANCH..."
-    hg clone http://hg.mozilla.org/$BRANCH firefox-$VERSION
+    hg clone http://hg.mozilla.org/$BRANCH $PRODUCT-$VERSION
+    if [ "$PRODUCT" = "thunderbird" ]; then
+      hg clone http://hg.mozilla.org/releases/comm-$CHANNEL thunderbird-$VERSION/comm
+    fi
   fi
-  pushd firefox-$VERSION || exit 1
-  hg update --check
-  [ "$RELEASE_TAG" == "default" ] || hg update -r $RELEASE_TAG
+  pushd $PRODUCT-$VERSION || exit 1
+  hg update --check $FF_RELEASE_TAG
+  [ "$FF_RELEASE_TAG" == "default" ] || hg update -r $FF_RELEASE_TAG
   # get repo and source stamp
   echo -n "REV=" > ../source-stamp.txt
   hg -R . parent --template="{node|short}\n" >> ../source-stamp.txt
   echo -n "REPO=" >> ../source-stamp.txt
   hg showconfig paths.default 2>/dev/null | head -n1 | sed -e "s/^ssh:/http:/" >> ../source-stamp.txt
+
+  if [ "$PRODUCT" = "thunderbird" ]; then
+    pushd comm || exit 1
+    hg update --check $TB_RELEASE_TAG
+    popd || exit 1
+    rm -rf thunderbird-${VERSION}/{,comm/}other-licenses/7zstub
+  fi
   popd || exit 1
 
   echo "creating archive..."
-  tar $compression -cf firefox-$VERSION$VERSION_SUFFIX.source.tar.xz --exclude=.hgtags --exclude=.hgignore --exclude=.hg --exclude=CVS firefox-$VERSION
+  tar $compression -cf $PRODUCT-$VERSION$VERSION_SUFFIX.source.tar.xz --exclude=.hgtags --exclude=.hgignore --exclude=.hg --exclude=CVS $PRODUCT-$VERSION
 fi
   
 if [ $LOCALES_CHANGED -ne 0 ]; then
@@ -192,12 +214,18 @@ if [ $LOCALES_CHANGED -ne 0 ]; then
           else
             hg clone "http://hg.mozilla.org/l10n-central/$locale" "l10n/$locale"
           fi
-          [ "$RELEASE_TAG" == "default" ] || hg -R "l10n/$locale" up -C -r "$changeset"
+          [ "$FF_RELEASE_TAG" == "default" ] || hg -R "l10n/$locale" up -C -r "$changeset"
           ;;
       esac
     done
   echo "creating l10n archive..."
-  tar $compression -cf l10n-$VERSION$VERSION_SUFFIX.tar.xz --exclude=.hgtags --exclude=.hgignore --exclude=.hg l10n
+if [ "$PRODUCT" = "thunderbird" ]; then
+    TB_TAR_FLAGS="--exclude=browser --exclude=suite"
+fi
+  tar $compression -cf l10n-$VERSION$VERSION_SUFFIX.tar.xz \
+  --exclude=.hgtags --exclude=.hgignore --exclude=.hg \
+  $TB_TAR_FLAGS \
+  l10n
 fi
 
 # compare-locales
