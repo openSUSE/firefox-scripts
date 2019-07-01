@@ -185,7 +185,13 @@ if [ $LOCALES_CHANGED -ne 0 ]; then
         *)
           echo "reading changeset information for $locale"
           echo "fetching $locale changeset $changeset ..."
-          hg clone "http://hg.mozilla.org/l10n-central/$locale" "l10n/$locale"
+          if [ -d "l10n/$locale/.hg" ]; then
+            pushd "l10n/$locale" || exit 1
+            hg pull
+            popd || exit 1
+          else
+            hg clone "http://hg.mozilla.org/l10n-central/$locale" "l10n/$locale"
+          fi
           [ "$RELEASE_TAG" == "default" ] || hg -R "l10n/$locale" up -C -r "$changeset"
           ;;
       esac
@@ -196,6 +202,12 @@ fi
 
 # compare-locales
 echo "creating compare-locales"
-hg clone http://hg.mozilla.org/build/compare-locales
+if [ -d compare-locales/.hg ]; then
+  pushd compare-locales || exit 1
+  hg pull
+  popd || exit 1
+else
+  hg clone http://hg.mozilla.org/build/compare-locales
+fi
 tar $compression -cf compare-locales.tar.xz --exclude=.hgtags --exclude=.hgignore --exclude=.hg compare-locales
 
