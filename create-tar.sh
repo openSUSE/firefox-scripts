@@ -93,8 +93,9 @@ function locales_parse() {
 }
 
 function locales_unchanged() {
-  prev_url=$(locales_get "$PREV_VERSION$PREV_VERSION_SUFFIX") || exit 1
-  curr_url=$(locales_get "$VERSION$VERSION_SUFFIX")      || exit 1
+  # If no json-file for one of the versions can be found, we say "they changed"
+  prev_url=$(locales_get "$PREV_VERSION$PREV_VERSION_SUFFIX") || return 1
+  curr_url=$(locales_get "$VERSION$VERSION_SUFFIX")      || return 1
 
   prev_content=$(locales_parse "$prev_url") || exit 1
   curr_content=$(locales_parse "$curr_url") || exit 1
