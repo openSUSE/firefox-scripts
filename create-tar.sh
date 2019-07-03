@@ -15,6 +15,7 @@ FF_RELEASE_TAG="" # Needs only to be set if no tar-ball can be downloaded
 TB_RELEASE_TAG="" # Only relevant for Thunderbird
 PREV_VERSION="60.6.3" # Prev. version only needed for locales (leave empty to force l10n-generation)
 PREV_VERSION_SUFFIX="esr"
+#SKIP_LOCALES="" # Uncomment to skip l10n and compare-locales-generation
 EOF
 
 exit 1
@@ -126,16 +127,21 @@ if (($? != 127)); then
   compression='-Ipixz'
 fi
 
-# TODO: Thunderbird has usually "default" as locale entry. 
-# There we probably need to double-check Firefox-locals
-# For now, just download every time for Thunderbird
-if [ "$PRODUCT" = "firefox" ] && [ "$PREV_VERSION" != "" ] && locales_unchanged; then
-  printf "%-40s: Did not change. Skipping.\n" "locales"
-  LOCALES_CHANGED=0
-else
-  printf "%-40s: Need to download.\n" "locales"
-  LOCALES_CHANGED=1
+if [ -z ${SKIP_LOCALES+x} ]; then
+  # TODO: Thunderbird has usually "default" as locale entry. 
+  # There we probably need to double-check Firefox-locals
+  # For now, just download every time for Thunderbird
+  if [ "$PRODUCT" = "firefox" ] && [ "$PREV_VERSION" != "" ] && locales_unchanged; then
+    printf "%-40s: Did not change. Skipping.\n" "locales"
+    LOCALES_CHANGED=0
+  else
+    printf "%-40s: Need to download.\n" "locales"
+    LOCALES_CHANGED=1
+  fi
+else 
+  printf "%-40s: User forced skip (SKIP_LOCALES set)\n" "locales"
 fi
+
 # Check what is going to be done and ask for consent
 for ff in $SOURCE_TARBALL $SOURCE_TARBALL.asc; do
   printf "%-40s: %s\n" $ff "$(check_tarball_source $ff)"
@@ -154,10 +160,11 @@ fi
 
 # we might have an upstream archive already and can skip the checkout
 if [ -e $SOURCE_TARBALL ]; then
-  echo "skip $PRODUCT checkout and use available archive"
-  # still need to extract the locale information from the archive
-  echo "extract locale changesets"
-  tar -xf $SOURCE_TARBALL $LOCALE_FILE
+  if [ -z ${SKIP_LOCALES+x} ]; then
+    # still need to extract the locale information from the archive
+    echo "extract locale changesets"
+    tar -xf $SOURCE_TARBALL $LOCALE_FILE
+  fi
 else
   # We are working on a version that is not yet published on the mozilla mirror
   # so we have to actually check out the repo
@@ -206,7 +213,12 @@ else
   echo "creating archive..."
   tar $compression -cf $PRODUCT-$VERSION$VERSION_SUFFIX.source.tar.xz --exclude=.hgtags --exclude=.hgignore --exclude=.hg --exclude=CVS $PRODUCT-$VERSION
 fi
-  
+
+if [ ! -z ${SKIP_LOCALES+x} ]; then
+  echo "Skipping locales-creation."
+  exit 0
+fi
+
 if [ $LOCALES_CHANGED -ne 0 ]; then
   # l10n
   echo "fetching locales..."
