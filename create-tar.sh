@@ -13,7 +13,7 @@ VERSION="60.7.0"
 VERSION_SUFFIX="esr"
 FF_RELEASE_TAG="" # Needs only to be set if no tar-ball can be downloaded
 TB_RELEASE_TAG="" # Only relevant for Thunderbird
-PREV_VERSION="60.6.3" # Prev. version only needed for locales
+PREV_VERSION="60.6.3" # Prev. version only needed for locales (leave empty to force l10n-generation)
 PREV_VERSION_SUFFIX="esr"
 EOF
 
@@ -129,7 +129,7 @@ fi
 # TODO: Thunderbird has usually "default" as locale entry. 
 # There we probably need to double-check Firefox-locals
 # For now, just download every time for Thunderbird
-if [ "$PRODUCT" = "firefox" ] && locales_unchanged; then
+if [ "$PRODUCT" = "firefox" ] && [ "$PREV_VERSION" != "" ] && locales_unchanged; then
   printf "%-40s: Did not change. Skipping.\n" "locales"
   LOCALES_CHANGED=0
 else
