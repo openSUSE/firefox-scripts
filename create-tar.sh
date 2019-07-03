@@ -1,20 +1,31 @@
 #!/bin/bash
 
-# TODO
-# http://ftp.mozilla.org/pub/firefox/candidates/48.0-candidates/build2/linux-x86_64/en-US/firefox-48.0.json
-# "moz_source_stamp": "c1de04f39fa956cfce83f6065b0e709369215ed5"
-# http://ftp.mozilla.org/pub/firefox/candidates/48.0-candidates/build2/l10n_changesets.txt
-#
+function print_usage_and_exit() {
+  echo "Usage: create-tar.sh tar_stamp"
+  echo ""
+  echo "Where tar_stamp should look like this:"
+  echo ""
+  cat << EOF
 # Node ID: 64ee63facd4ff96b3e8590cff559d7e97ac6b061
-
-PRODUCT="firefox"
+PRODUCT="firefox" # "firefox" or "thunderbird"
 CHANNEL="esr60"
-FF_RELEASE_TAG=""
-TB_RELEASE_TAG=""
-PREV_VERSION="60.6.3"
-PREV_VERSION_SUFFIX="esr"
 VERSION="60.7.0"
 VERSION_SUFFIX="esr"
+FF_RELEASE_TAG="" # Needs only to be set if no tar-ball can be downloaded
+TB_RELEASE_TAG="" # Only relevant for Thunderbird
+PREV_VERSION="60.6.3" # Prev. version only needed for locales
+PREV_VERSION_SUFFIX="esr"
+EOF
+
+exit 1
+}
+
+if [ $# -ne 1 ]; then
+  print_usage_and_exit
+fi
+
+# Sourcing the given tar_stamp-file to have the variables available
+source "$1" || print_usage_and_exit
 
 # Internal variables
 BRANCH="releases/mozilla-$CHANNEL"

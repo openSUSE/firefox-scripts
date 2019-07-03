@@ -5,9 +5,12 @@ For updating Firefox.
 Downloads tar-balls, checks locales, packages all.
 
 ### Usage
-1. Adjust versions inside create-tar.sh
-2. Run in an empty directory
-3. Copy resulting tar-balls to your repo
+1. Have create-tar.sh in your `$PATH` (or call it directly, if you don't mind the typing)
+2. Run create-tar.sh without argument to show help-output
+3. Copy example tar_stamp from help-output
+4. Go into an empty directory, create tar_stamp and adjust to your needs
+5. Run `create-tar.sh tar_stamp`
+6. Copy resulting tar-balls to your repo
 
 ## mfsa-yml.py
 Queries MFSA (Mozilla Foundation Security Advisory) and parses them into the changelog format.
