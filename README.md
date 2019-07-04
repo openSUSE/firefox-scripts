@@ -44,3 +44,24 @@ Program to import all patchfiles into an hg-repo from a given rpm-spec file.
 1. Go to your hg repo
 2. run script with the associated spec-file
 3. Apply the patches in the patch-queue
+
+
+## get\_mozconfig\_from\_spec
+
+If one wants to build FF or TB without OBS, one needs a mozconfig. This file is generated in the spec-file.
+This script, utilizing the rpm build-option `--with only_print_mozconfig` prints the mozconfig for a given
+spec-file and suse-version.
+
+### Usage
+1. Find out which `%suse_version` you need (e.g. 1510)
+2. Optional: Find out which arch you want (otherwise local arch is used, e.g. s390x)
+3. Optional: Find out additional rpmbuild-commands you may need/want
+3. Call `get_mozconfig_from_spec $SPECFILE $SUSE_VERSION [--target=$ARCH]`
+
+
+## chr
+
+Script to chroot into an OBS chroot, doing additional preparation like mounting system directories and such.
+
+### Usage
+See help-output
