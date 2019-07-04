@@ -36,4 +36,11 @@ It will also copy all relevant Firefox-files to github-repo/Firefox/ (excluding 
     3. By giving it via env-variable: `FF_SYNC_TARGET=/tmp sync_ff`
     4. By giving it via env-variable from your `.bashrc`
 
+## spec\_patch\_series
 
+Program to import all patchfiles into an hg-repo from a given rpm-spec file.
+
+### Usage
+1. Go to your hg repo
+2. run script with the associated spec-file
+3. Apply the patches in the patch-queue
