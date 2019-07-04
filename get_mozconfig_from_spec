@@ -1,0 +1,25 @@
+#!/bin/bash
+
+if [ $# -lt 2 ]; then
+    echo "This script is there to parse from a given spec-file the generated mozconfig + compiler flags,"
+    echo "if one wants to build Firefox/Thunderbird without OBS, directly from source."
+    echo ""
+    echo "Usage: $0 SPECFILE SUSE_VERSION [RPMBUILD_ARGS]"
+    echo ""
+    echo "Where SPECFILE:      The spec-file to parse (needs to support --with only_print_mozconfig)"
+    echo "      SUSE_VERSION:  Content of %suse_version (e.g. 1500), for which to build the mozconfig"
+    echo "      RPMBUILD_ARGS: Additional args for rpmbuild, like --target=s390x"
+    echo ""
+    echo "NOTE: use \"2> /dev/null\" to get rid of all rpmbuild-messages and only get the mozconfig"
+    echo "      Not active by default to get possible error messages"
+    exit 1
+fi
+SPECFILE="$1"
+SUSE_VERSION="$2"
+ARGS="$3"
+# We use --short-circuit -bc to jump directly to "%build" (although this is not completely working)
+# Then we use --no* to skip a lot of checks and cleanups
+# And finnaly, we use --with only_print_mozconfig to print out all things done in "%build" instead of
+# executing it.
+rpmbuild --short-circuit -bc --nocheck --noclean --nodeps --with only_print_mozconfig --define "suse_version $SUSE_VERSION" $ARGS "$SPECFILE"
+
