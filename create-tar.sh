@@ -163,7 +163,7 @@ fi
 
 # we might have an upstream archive already and can skip the checkout
 if [ -e $SOURCE_TARBALL ]; then
-  if [ -z ${SKIP_LOCALES+x} ]; then
+  if [ -z ${SKIP_LOCALES+x} ] && [ $LOCALES_CHANGED -ne 0 ]; then
     # still need to extract the locale information from the archive
     echo "extract locale changesets"
     tar -xf $SOURCE_TARBALL $LOCALE_FILE
@@ -246,13 +246,18 @@ if [ $LOCALES_CHANGED -ne 0 ]; then
       esac
     done
   echo "creating l10n archive..."
-if [ "$PRODUCT" = "thunderbird" ]; then
+  if [ "$PRODUCT" = "thunderbird" ]; then
     TB_TAR_FLAGS="--exclude=browser --exclude=suite"
-fi
+  fi
   tar $compression -cf l10n-$VERSION$VERSION_SUFFIX.tar.xz \
   --exclude=.hgtags --exclude=.hgignore --exclude=.hg \
   $TB_TAR_FLAGS \
   l10n
+elif [ -f "l10n-$PREV_VERSION$PREV_VERSION_SUFFIX.tar.xz" ]; then
+  # Locales did not change, but the old tar-ball is in this directory
+  # Simply rename it:
+  echo "Moving l10n-$PREV_VERSION$PREV_VERSION_SUFFIX.tar.xz to l10n-$VERSION$VERSION_SUFFIX.tar.xz"
+  mv "l10n-$PREV_VERSION$PREV_VERSION_SUFFIX.tar.xz" "l10n-$VERSION$VERSION_SUFFIX.tar.xz"
 fi
 
 # compare-locales
