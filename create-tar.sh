@@ -80,21 +80,24 @@ function locales_get() {
 
   LAST_FOUND=""
   # Unfortunately, locales-files are not associated to releases, but to builds.
-  # And since we don't know which build was the final build, we go from 1 to
-  # the last we find and try to find the latest one that exists.
+  # And since we don't know which build was the final build, we go from 9 downwards
+  # try to find the latest one that exists (assuming there are no more than 9 builds).
   # Error only if not even the first one exists
-  for BUILD_ID in $(seq 1 9); do
+  for BUILD_ID in $(seq 9 -1 0); do
     FINAL_URL="${URL_TO_CHECK}-build${BUILD_ID}.json"
     if wget --quiet --spider "$FINAL_URL"; then
       LAST_FOUND="$FINAL_URL"
-    elif [ $BUILD_ID -gt 1 ]; then
-      echo "$LAST_FOUND"
-      return 0
-    else
-      echo "Error: Could not find locales-file (json) for Firefox $TMP_VERSION !"  1>&2
-      return 1
+      break
     fi
   done
+
+  if [ "$LAST_FOUND" != "" ]; then
+    echo "$LAST_FOUND"
+    return 0
+  else
+    echo "Error: Could not find locales-file (json) for Firefox $TMP_VERSION !"  1>&2
+    return 1
+  fi
 }
 
 function locales_parse() {
