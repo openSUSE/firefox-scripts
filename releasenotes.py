@@ -58,7 +58,7 @@ def print_release_note(json_data):
 
 
 def print_security_advisory(mfsa_data, bsc):
-    mfsa_yaml = yaml.full_load(mfsa_data)
+    mfsa_yaml = yaml.safe_load(mfsa_data)
 
     mfsa = mfsa_data[3:mfsa_data.find('.')].replace('mfsa', 'MFSA ')
 
