@@ -7,9 +7,9 @@ Downloads tar-balls, checks locales, packages all.
 ### Usage
 1. Have create-tar.sh in your `$PATH` (or call it directly, if you don't mind the typing)
 2. Run create-tar.sh without argument to show help-output
-3. Copy example tar_stamp from help-output
-4. Go into an empty directory, create tar_stamp and adjust to your needs
-5. Run `create-tar.sh tar_stamp`
+3. Copy example tar_stamps from help-output
+4. Go into an empty directory, create tar_stamps and adjust to your needs
+5. Run `create-tar.sh tar_stamps`
 6. Copy resulting tar-balls to your repo
 
 ## mfsa-yml.py

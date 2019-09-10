@@ -1,9 +1,9 @@
 #!/bin/bash
 
 function print_usage_and_exit() {
-  echo "Usage: create-tar.sh tar_stamp"
+  echo "Usage: create-tar.sh tar_stamps"
   echo ""
-  echo "Where tar_stamp should look like this:"
+  echo "Where tar_stamps should look like this:"
   echo ""
   cat << EOF
 # Node ID: 64ee63facd4ff96b3e8590cff559d7e97ac6b061
@@ -25,7 +25,7 @@ if [ $# -ne 1 ]; then
   print_usage_and_exit
 fi
 
-# Sourcing the given tar_stamp-file to have the variables available
+# Sourcing the given tar_stamps-file to have the variables available
 source "$1" || print_usage_and_exit
 
 # Internal variables
