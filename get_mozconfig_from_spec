@@ -27,4 +27,6 @@ echo "### For local building, you might want to activate: ###"
 echo "# Default usually is not as performant as specifying -j directly"
 echo "#mk_add_options MOZ_MAKE_FLAGS=-j4"
 echo "#ac_add_options --with-ccache=/usr/bin/ccache"
+echo "# Way faster linking:"
+echo "#ac_add_options --enable-linker=lld"
 
