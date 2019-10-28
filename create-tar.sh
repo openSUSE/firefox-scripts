@@ -37,6 +37,7 @@ fi
 
 SOURCE_TARBALL="$PRODUCT-$VERSION$VERSION_SUFFIX.source.tar.xz"
 FTP_URL="https://ftp.mozilla.org/pub/$PRODUCT/releases/$VERSION$VERSION_SUFFIX/source"
+FTP_CANDIDATES_URL="https://ftp.mozilla.org/pub/$PRODUCT/candidates/$VERSION$VERSION_SUFFIX-candidates"
 # Make first letter of PRODCUT upper case
 PRODUCT_CAP="${PRODUCT^}"
 LOCALES_URL="https://product-details.mozilla.org/1.0/l10n/$PRODUCT_CAP"
@@ -73,25 +74,52 @@ function check_for_binary() {
   fi
 }
 
-function locales_get() {
-  TMP_VERSION="$1"
-  URL_TO_CHECK="${LOCALES_URL}-${TMP_VERSION}"
+function get_source_stamp() {
+  BUILD_ID="$1"
+  BUILD_JSON=$(curl --silent --fail "$FTP_CANDIDATES_URL/build${BUILD_ID}/linux-x86_64/en-US/firefox-$VERSION$VERSION_SUFFIX.json") || return 1;
+  REV=$(echo "$BUILD_JSON" | jq .moz_source_stamp)
+  SOURCE_REPO=$(echo "$BUILD_JSON" | jq .moz_source_repo)
+  TIMESTAMP=$(echo "$BUILD_JSON" | jq .buildid)
+  echo "REV=$REV" > source-stamp.txt
+  echo "REPO=$SOURCE_REPO" >> source-stamp.txt
+  echo "TIMESTAMP=$TIMESTAMP" >> source-stamp.txt
+}
 
+function get_build_number() {
   LAST_FOUND=""
+  URL_TO_CHECK="$FTP_CANDIDATES_URL"
   # Unfortunately, locales-files are not associated to releases, but to builds.
   # And since we don't know which build was the final build, we go from 9 downwards
   # try to find the latest one that exists (assuming there are no more than 9 builds).
   # Error only if not even the first one exists
   for BUILD_ID in $(seq 9 -1 0); do
-    FINAL_URL="${URL_TO_CHECK}-build${BUILD_ID}.json"
+    FINAL_URL="${URL_TO_CHECK}/build${BUILD_ID}/SHA512SUMS.asc"
     if wget --quiet --spider "$FINAL_URL"; then
-      LAST_FOUND="$FINAL_URL"
+      # TODO: Compare SHA512SUMS.asc with the asc we downloaded above to make sure
+      # HASH=$(curl $FINAL_URL)
+      LAST_FOUND="$BUILD_ID"
       break
     fi
   done
 
   if [ "$LAST_FOUND" != "" ]; then
     echo "$LAST_FOUND"
+    return 0
+  else
+    echo "Error: Could not find build-number for Firefox $TMP_VERSION !"  1>&2
+    return 1
+  fi
+}
+
+
+function locales_get() {
+  TMP_VERSION="$1"
+  BUILD_ID="$2"
+  URL_TO_CHECK="${LOCALES_URL}-${TMP_VERSION}"
+  FINAL_URL="${URL_TO_CHECK}-build${BUILD_ID}.json"
+
+  if wget --quiet --spider "$FINAL_URL"; then
+    echo "$FINAL_URL"
     return 0
   else
     echo "Error: Could not find locales-file (json) for Firefox $TMP_VERSION !"  1>&2
@@ -107,9 +135,10 @@ function locales_parse() {
 }
 
 function locales_unchanged() {
+  BUILD_ID="$1"
   # If no json-file for one of the versions can be found, we say "they changed"
-  prev_url=$(locales_get "$PREV_VERSION$PREV_VERSION_SUFFIX") || return 1
-  curr_url=$(locales_get "$VERSION$VERSION_SUFFIX")      || return 1
+  prev_url=$(locales_get "$PREV_VERSION$PREV_VERSION_SUFFIX" "$BUILD_ID") || return 1
+  curr_url=$(locales_get "$VERSION$VERSION_SUFFIX" "$BUILD_ID")           || return 1
 
   prev_content=$(locales_parse "$prev_url") || exit 1
   curr_content=$(locales_parse "$curr_url") || exit 1
@@ -129,11 +158,14 @@ if (($? != 127)); then
   compression='-Ipixz'
 fi
 
+# Get ID 
+BUILD_ID=$(get_build_number)
+
 if [ -z ${SKIP_LOCALES+x} ]; then
   # TODO: Thunderbird has usually "default" as locale entry. 
   # There we probably need to double-check Firefox-locals
   # For now, just download every time for Thunderbird
-  if [ "$PRODUCT" = "firefox" ] && [ "$PREV_VERSION" != "" ] && locales_unchanged; then
+  if [ "$PRODUCT" = "firefox" ] && [ "$PREV_VERSION" != "" ] && locales_unchanged "$BUILD_ID"; then
     printf "%-40s: Did not change. Skipping.\n" "locales"
     LOCALES_CHANGED=0
   else
@@ -167,6 +199,7 @@ if [ -e $SOURCE_TARBALL ]; then
     echo "extract locale changesets"
     tar -xf $SOURCE_TARBALL $LOCALE_FILE
   fi
+  get_source_stamp "$BUILD_ID"
 else
   # We are working on a version that is not yet published on the mozilla mirror
   # so we have to actually check out the repo
