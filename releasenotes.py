@@ -17,11 +17,23 @@ wrapCHLOG = textwrap.TextWrapper(
     width = 65)
 
 
-def print_release_note(json_data):
+def print_json_release_notes(json_data):
     data = json.loads(json_data)
 
     print("- {0}".format(data['title']))
-    for note in data['notes']:
+    print_release_notes(data)
+
+
+def print_yml_file(file_data, bsc):
+    yaml_data = yaml.safe_load(file_data)
+    if "release" in yaml_data:
+        print_release_notes(yaml_data)
+    else:
+        print_security_advisory(file_data, yaml_data, bsc)
+
+
+def print_release_notes(notes):
+    for note in notes['notes']:
         if note["tag"] == "":
              # This is just the reference-link to upstream release notes
              continue
@@ -31,7 +43,7 @@ def print_release_note(json_data):
             continue
 
         content = note["note"]
-        if note["bug"] != "":
+        if "bug" in note and note["bug"] != "":
             content += " (bmo#{0})".format(note["bug"])
 
         # Replacing ([bug 1234123][0]) with [bmo#1234123]:
@@ -39,6 +51,9 @@ def print_release_note(json_data):
 
         # Replacing [something with a link][1] with "something with a link"
         content = re.sub("\[(?P<text>[^\]]+)\]\[\d+\]", "\g<text>", content)
+
+        # Replacing [something with a link](http:...) with "something with a link"
+        content = re.sub("\[(?P<text>[^\]]+)\]\((?P<link>[^\)]+)\)", "\g<text>", content)
 
         contentlines = content.splitlines()
         print(wrapBMO.fill("* {0}: {1}".format(note["tag"], contentlines[0])))
@@ -57,9 +72,7 @@ def print_release_note(json_data):
             print(wrapCHLOG.fill("{0}".format(line)))
 
 
-def print_security_advisory(mfsa_data, bsc):
-    mfsa_yaml = yaml.safe_load(mfsa_data)
-
+def print_security_advisory(mfsa_data, mfsa_yaml, bsc):
     mfsa = mfsa_data[3:mfsa_data.find('.')].replace('mfsa', 'MFSA ')
 
     print("- Mozilla Firefox {0}".format(mfsa_yaml['fixed_in'][0]))
@@ -102,9 +115,9 @@ def main():
             exit(1)
 
         if argument.endswith(".json"):
-            print_release_note(file_data)
+            print_json_release_notes(file_data)
         elif argument.endswith(".yml"):
-            print_security_advisory(file_data, bsc)
+            print_yml_file(file_data, bsc)
         else:
             print("Wrong kind of file! Only yml and json-files supported!")
             print_usage_and_exit()
