@@ -89,24 +89,16 @@ function get_build_number() {
   LAST_FOUND=""
   URL_TO_CHECK="$FTP_CANDIDATES_URL"
   # Unfortunately, locales-files are not associated to releases, but to builds.
-  # And since we don't know which build was the final build, we go from 9 downwards
-  # try to find the latest one that exists (assuming there are no more than 9 builds).
+  # And since we don't know which build was the final build, we grep them all from
+  # the candidates-page, sort them and take the last one which should be the oldest
   # Error only if not even the first one exists
-  for BUILD_ID in $(seq 9 -1 0); do
-    FINAL_URL="${URL_TO_CHECK}/build${BUILD_ID}/SHA512SUMS.asc"
-    if wget --quiet --spider "$FINAL_URL"; then
-      # TODO: Compare SHA512SUMS.asc with the asc we downloaded above to make sure
-      # HASH=$(curl $FINAL_URL)
-      LAST_FOUND="$BUILD_ID"
-      break
-    fi
-  done
+  LAST_FOUND=$(curl --silent --fail "$FTP_CANDIDATES_URL/" | grep -o "build[0-9]*/" | sort | uniq | tail -n 1)
 
   if [ "$LAST_FOUND" != "" ]; then
     echo "$LAST_FOUND"
     return 0
   else
-    echo "Error: Could not find build-number for Firefox $TMP_VERSION !"  1>&2
+    echo "Error: Could not find build-number for Firefox $VERSION$VERSION_SUFFIX !"  1>&2
     return 1
   fi
 }
