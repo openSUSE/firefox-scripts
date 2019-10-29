@@ -12,14 +12,19 @@ Downloads tar-balls, checks locales, packages all.
 5. Run `create-tar.sh tar_stamps`
 6. Copy resulting tar-balls to your repo
 
-## mfsa-yml.py
-Queries MFSA (Mozilla Foundation Security Advisory) and parses them into the changelog format.
+## releasenotes.py
+Queries official release notes and MFSA (Mozilla Foundation Security Advisory) and parses them into the changelog format.
 
 ### Usage
-1. Clone or update mfsa-git: git clone https://github.com/mozilla/foundation-security-advisories.git
-2. Search which yaml-file(s) is relevant in the release notes
-3. Search SUSE bugzilla-ID for updating Firefox with security vulns.
-4. mfsa-yml.py foundation-security-advisories/announce/2017/mfsa<whichever you need>.yml <bugzilla ID>
+1. Clone or update https://github.com/mozilla/release-notes
+1. Clone or update https://github.com/thundernest/thunderbird-notes
+1. Clone or update https://github.com/mozilla/foundation-security-advisories
+1. Search for the correct release notes file
+1. Search which yaml-file(s) is relevant in the release notes
+1. Search SUSE bugzilla-ID for updating Firefox with security vulns.
+1. `releasenotes.py release-notes/releases/firefox-<VERSION> foundation-security-advisories/announce/<YEAR>/mfsa<whichever you need>.yml <bugzilla ID>`
+
+Note: All files can be passed individually as well. Or you can parse multiple releases in one go. Files are parsed in the order they are given in the commandline.
 
 ## sync\_ff
 Program to sync an OBS repo with the github-repo
