@@ -42,6 +42,7 @@ FTP_CANDIDATES_BASE_URL="https://ftp.mozilla.org/pub/$PRODUCT/candidates"
 # Make first letter of PRODCUT upper case
 PRODUCT_CAP="${PRODUCT^}"
 LOCALES_URL="https://product-details.mozilla.org/1.0/l10n/$PRODUCT_CAP"
+PRODUCT_URL="https://product-details.mozilla.org/1.0/$PRODUCT.json"
 # Exit script on CTRL+C
 trap "exit" INT
 
@@ -104,12 +105,21 @@ function get_source_stamp() {
 function get_build_number() {
   LAST_FOUND=""
   VERSION_WITH_SUFFIX="$1"
-  FTP_CANDIDATES_BASE_URL=$(get_ftp_candidates_url $VERSION_WITH_SUFFIX)
-  # Unfortunately, locales-files are not associated to releases, but to builds.
-  # And since we don't know which build was the final build, we grep them all from
-  # the candidates-page, sort them and take the last one which should be the oldest
-  # Error only if not even the first one exists
-  LAST_FOUND=$(curl --silent --fail "$FTP_CANDIDATES_BASE_URL/" | grep -o "build[0-9]*/" | sort | uniq | tail -n 1 | cut -d "/" -f 1)
+
+  BUILD_ID=$(curl --silent "$PRODUCT_URL" | jq -e '.["releases"] | .["'$PRODUCT-$VERSION_WITH_SUFFIX'"] | .["build_number"]')
+
+  # Slow fall-back
+  if [ $? -ne 0 ]; then
+      echo "Build number not found in product URL, falling back to slow FTP-parsing." 1>&2
+      FTP_CANDIDATES_BASE_URL=$(get_ftp_candidates_url $VERSION_WITH_SUFFIX)
+      # Unfortunately, locales-files are not associated to releases, but to builds.
+      # And since we don't know which build was the final build, we grep them all from
+      # the candidates-page, sort them and take the last one which should be the oldest
+      # Error only if not even the first one exists
+      LAST_FOUND=$(curl --silent --fail "$FTP_CANDIDATES_BASE_URL/" | grep -o "build[0-9]*/" | sort | uniq | tail -n 1 | cut -d "/" -f 1)
+  else
+      LAST_FOUND="build$BUILD_ID"
+  fi
 
   if [ "$LAST_FOUND" != "" ]; then
     echo "$LAST_FOUND"
