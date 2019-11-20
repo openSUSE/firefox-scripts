@@ -84,7 +84,7 @@ function check_for_binary() {
 function get_source_stamp() {
   BUILD_ID="$1"
   FTP_CANDIDATES_BASE_URL=$(get_ftp_candidates_url $VERSION$VERSION_SUFFIX)
-  FTP_CANDIDATES_JSON_SUFFIX="${BUILD_ID}/linux-x86_64/en-US/firefox-$VERSION$VERSION_SUFFIX.json"
+  FTP_CANDIDATES_JSON_SUFFIX="${BUILD_ID}/linux-x86_64/en-US/$PRODUCT-$VERSION$VERSION_SUFFIX.json"
   BUILD_JSON=$(curl --silent --fail "$FTP_CANDIDATES_BASE_URL/$FTP_CANDIDATES_JSON_SUFFIX") || return 1;
   REV=$(echo "$BUILD_JSON" | jq .moz_source_stamp)
   SOURCE_REPO=$(echo "$BUILD_JSON" | jq .moz_source_repo)
