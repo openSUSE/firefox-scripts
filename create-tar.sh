@@ -260,10 +260,9 @@ else
   hg update --check $FF_RELEASE_TAG
   [ "$FF_RELEASE_TAG" == "default" ] || hg update -r $FF_RELEASE_TAG
   # get repo and source stamp
-  echo -n "REV=" > ../source-stamp.txt
-  hg -R . parent --template="{node|short}\n" >> ../source-stamp.txt
-  echo -n "REPO=" >> ../source-stamp.txt
-  hg showconfig paths.default 2>/dev/null | head -n1 | sed -e "s/^ssh:/http:/" >> ../source-stamp.txt
+  REV=$(hg -R . parent --template="{node|short}\n")
+  SOURCE_REPO=$(hg showconfig paths.default 2>/dev/null | head -n1 | sed -e "s/^ssh:/http:/")
+  TIMESTAMP=$(date +%Y%m%d%H%M%S)
 
   if [ "$PRODUCT" = "thunderbird" ]; then
     pushd comm || exit 1
@@ -272,6 +271,19 @@ else
     rm -rf thunderbird-${VERSION}/{,comm/}other-licenses/7zstub
   fi
   popd || exit 1
+
+  echo "Extending $TAR_STAMP with:"
+  echo "RELEASE_REPO=${SOURCE_REPO}"
+  echo "RELEASE_TAG=${REV}"
+  echo "RELEASE_TIMESTAMP=${TIMESTAMP}"
+
+  # We "remove and add" instead of "replace" in case the entries are not there yet
+  # Removing the old RELEASE_-tags
+  sed -i "/RELEASE_\(TAG\|REPO\|TIMESTAMP\)=.*/d" "$TAR_STAMP"
+  # Appending the new 
+  echo "RELEASE_REPO=$SOURCE_REPO" >> "$TAR_STAMP"
+  echo "RELEASE_TAG=$REV" >> "$TAR_STAMP"
+  echo "RELEASE_TIMESTAMP=$TIMESTAMP" >> "$TAR_STAMP"
 
   echo "creating archive..."
   tar $compression -cf $PRODUCT-$VERSION$VERSION_SUFFIX.source.tar.xz --exclude=.hgtags --exclude=.hgignore --exclude=.hg --exclude=CVS $PRODUCT-$VERSION
