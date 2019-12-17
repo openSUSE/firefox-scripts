@@ -81,6 +81,8 @@ def print_security_advisory(mfsa_data, mfsa_yaml, bsc):
         cve = a
         bmos = []
         for b in mfsa_yaml['advisories'][a]['bugs']:
+            if 'url' not in b:
+                continue
             bmos += str(b['url']).split(', ')
         bmos.sort()
         bmos = map(lambda b: "bmo#" + b, bmos)
