@@ -75,7 +75,7 @@ def print_release_notes(notes):
 def print_security_advisory(mfsa_data, mfsa_yaml, bsc):
     mfsa = mfsa_data[3:mfsa_data.find('.')].replace('mfsa', 'MFSA ')
 
-    print("- Mozilla Firefox {0}".format(mfsa_yaml['fixed_in'][0]))
+    print("- Mozilla {0}".format(mfsa_yaml['fixed_in'][0]))
     print("  {0} (bsc#{1})".format(mfsa, bsc))
     for a in mfsa_yaml['advisories']:
         cve = a
