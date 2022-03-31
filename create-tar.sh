@@ -37,6 +37,7 @@ else
 fi
 
 SOURCE_TARBALL="$PRODUCT-$VERSION$VERSION_SUFFIX.source.tar.xz"
+PREV_SOURCE_TARBALL="$PRODUCT-$PREV_VERSION$PREV_VERSION_SUFFIX.source.tar.xz"
 FTP_URL="https://ftp.mozilla.org/pub/$PRODUCT/releases/$VERSION$VERSION_SUFFIX/source"
 FTP_CANDIDATES_BASE_URL="https://ftp.mozilla.org/pub/$PRODUCT/candidates"
 # Make first letter of PRODCUT upper case
@@ -351,4 +352,12 @@ elif [ -f "l10n-$PREV_VERSION$PREV_VERSION_SUFFIX.tar.xz" ]; then
   # Simply rename it:
   echo "Moving l10n-$PREV_VERSION$PREV_VERSION_SUFFIX.tar.xz to l10n-$VERSION$VERSION_SUFFIX.tar.xz"
   mv "l10n-$PREV_VERSION$PREV_VERSION_SUFFIX.tar.xz" "l10n-$VERSION$VERSION_SUFFIX.tar.xz"
+fi
+
+if [ -e $PREV_SOURCE_TARBALL ]; then
+    echo ""
+    echo "Deleting old sources tarball $PREV_SOURCE_TARBALL"
+    $(ask_cont_abort_question "Is this ok?") || exit 0
+    rm "$PREV_SOURCE_TARBALL"
+    rm "$PREV_SOURCE_TARBALL.asc"
 fi
