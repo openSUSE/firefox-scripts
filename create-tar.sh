@@ -145,11 +145,24 @@ function locales_get() {
   fi
 }
 
-function locales_parse() {
+function locales_parse_file() {
+  FILE="$1"
+  cat "$FILE" | python -c "import json; import sys; \
+             print('\n'.join(['{} {}'.format(key, value['revision']) \
+                for key, value in sorted(json.load(sys.stdin).items())]));"
+}
+
+function locales_parse_url() {
   URL="$1"
   curl -s "$URL" | python -c "import json; import sys; \
              print('\n'.join(['{} {}'.format(key, value['changeset']) \
                 for key, value in sorted(json.load(sys.stdin)['locales'].items())]));"
+}
+
+function extract_locales_file() {
+    # still need to extract the locale information from the archive
+    echo "extract locale changesets"
+    tar -xf $SOURCE_TARBALL $LOCALE_FILE
 }
 
 function locales_unchanged() {
@@ -157,10 +170,23 @@ function locales_unchanged() {
   PREV_BUILD_ID=$(get_build_number "$PREV_VERSION$PREV_VERSION_SUFFIX")
   # If no json-file for one of the versions can be found, we say "they changed"
   prev_url=$(locales_get "$PREV_VERSION$PREV_VERSION_SUFFIX" "$PREV_BUILD_ID") || return 1
-  curr_url=$(locales_get "$VERSION$VERSION_SUFFIX" "$BUILD_ID")           || return 1
+  prev_content=$(locales_parse_url "$prev_url") || exit 1
 
-  prev_content=$(locales_parse "$prev_url") || exit 1
-  curr_content=$(locales_parse "$curr_url") || exit 1
+  curr_url=$(locales_get "$VERSION$VERSION_SUFFIX" "$BUILD_ID")
+  if [ $? -ne 0 ]; then
+    # We did not find a locales file upstream on the servers
+    if [ -e $SOURCE_TARBALL ]; then
+        # We can find out what the locales are, by extracting the json-file from the tar-ball
+        # instead of getting it from the server
+        extract_locales_file || return 1
+        curr_content=$(locales_parse_file "$LOCALE_FILE") || exit 1
+      else 
+        # We can't know what the locales are in the current version
+        return 1
+      fi
+  else
+    curr_content=$(locales_parse_url "$curr_url") || exit 1
+  fi
 
   diff -y --suppress-common-lines -d <(echo "$prev_content") <(echo "$curr_content")
 }
@@ -211,9 +237,7 @@ fi
 # we might have an upstream archive already and can skip the checkout
 if [ -e $SOURCE_TARBALL ]; then
   if [ -z ${SKIP_LOCALES+x} ] && [ $LOCALES_CHANGED -ne 0 ]; then
-    # still need to extract the locale information from the archive
-    echo "extract locale changesets"
-    tar -xf $SOURCE_TARBALL $LOCALE_FILE
+    extract_locales_file
   fi
   get_source_stamp "$BUILD_ID"
 else
