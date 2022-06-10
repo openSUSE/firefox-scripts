@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import sys
+import os
 from collections import OrderedDict
 
 def print_usage_and_exit():
@@ -13,6 +14,7 @@ def main():
         print_usage_and_exit()
 
     spec_file = sys.argv[1];
+    dirname = os.path.dirname(spec_file)
 
     patch_names = OrderedDict()
     applied_patches = []
@@ -30,7 +32,7 @@ def main():
         # Newer spec-files have autopatch, so we can print all in order and stop
         if in_prep and line.startswith("%autopatch"):
             for patch in patch_names.values():
-                print(patch);
+                print(os.path.join(dirname, patch));
             return;
 
         if in_prep and line.startswith("%patch"):
@@ -40,7 +42,7 @@ def main():
         # Once we enter %build, all patches have been read and can be printed
         if in_prep and line.startswith("%build"):
             for patch in applied_patches:
-                print(patch);
+                print(os.path.join(dirname, patch));
             return;
 
 if __name__ == "__main__":
