@@ -46,6 +46,12 @@ def print_release_notes(notes):
         if "bug" in note and note["bug"] != "":
             content += " (bmo#{0})".format(note["bug"])
 
+        # thunderbird
+        if "bugs" in note and note["bugs"] != "":
+            content += " ("
+            content += ",".join([ "bmo#{0}".format(bug) for bug in note["bugs"] ])
+            content += ")"
+
         # Replacing ([bug 1234123][0]) with [bmo#1234123]:
         content = re.sub("\(\[bug (?P<ID>[0-9]+)\]\[[0-9]+\]\)", "(bmo#\g<ID>)", content)
 
