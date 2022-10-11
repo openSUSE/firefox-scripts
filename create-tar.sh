@@ -360,4 +360,8 @@ if [ -e $PREV_SOURCE_TARBALL ]; then
     $(ask_cont_abort_question "Is this ok?") || exit 0
     rm "$PREV_SOURCE_TARBALL"
     rm "$PREV_SOURCE_TARBALL.asc"
+    # if old and new lang-tarball are there, delete the old one
+    if [ -f "l10n-$PREV_VERSION$PREV_VERSION_SUFFIX.tar.xz" ] && [ -f "l10n-$VERSION$VERSION_SUFFIX.tar.xz" ]; then
+        rm "l10n-$PREV_VERSION$PREV_VERSION_SUFFIX.tar.xz"
+    fi
 fi
