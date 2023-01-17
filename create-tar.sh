@@ -31,9 +31,10 @@ source "$TAR_STAMP" || print_usage_and_exit
 # Internal variables
 BRANCH="releases/mozilla-$CHANNEL"
 if [ "$PRODUCT" = "firefox" ]; then
-  LOCALE_FILE="firefox-$VERSION/browser/locales/l10n-changesets.json"
+  FF_LOCALE_FILE="firefox-$VERSION/browser/locales/l10n-changesets.json"
 else
-  LOCALE_FILE="thunderbird-$VERSION/comm/mail/locales/l10n-changesets.json"
+  FF_LOCALE_FILE="thunderbird-$VERSION/browser/locales/l10n-changesets.json"
+  TB_LOCALE_FILE="thunderbird-$VERSION/comm/mail/locales/l10n-changesets.json"
 fi
 
 SOURCE_TARBALL="$PRODUCT-$VERSION$VERSION_SUFFIX.source.tar.xz"
@@ -44,6 +45,7 @@ FTP_CANDIDATES_BASE_URL="https://ftp.mozilla.org/pub/$PRODUCT/candidates"
 PRODUCT_CAP="${PRODUCT^}"
 LOCALES_URL="https://product-details.mozilla.org/1.0/l10n/$PRODUCT_CAP"
 PRODUCT_URL="https://product-details.mozilla.org/1.0/$PRODUCT.json"
+ALREADY_EXTRACTED_LOCALES_FILE=0
 # Exit script on CTRL+C
 trap "exit" INT
 
@@ -161,9 +163,18 @@ function locales_parse_url() {
 }
 
 function extract_locales_file() {
-    # still need to extract the locale information from the archive
-    echo "extract locale changesets"
-    tar -xf $SOURCE_TARBALL $LOCALE_FILE
+    if [ $ALREADY_EXTRACTED_LOCALES_FILE -ne 1 ]; then
+      # still need to extract the locale information from the archive
+      echo "extract locale changesets"
+      if [ "$PRODUCT" = "thunderbird" ]; then
+        tar -xf "$SOURCE_TARBALL" "$FF_LOCALE_FILE" "$TB_LOCALE_FILE"
+      else
+        tar -xf "$SOURCE_TARBALL" "$FF_LOCALE_FILE"
+      fi
+      ALREADY_EXTRACTED_LOCALES_FILE=1
+    else 
+      echo "Skipping locale changeset extraction, as it was already done."
+    fi
 }
 
 function locales_unchanged() {
@@ -180,7 +191,7 @@ function locales_unchanged() {
         # We can find out what the locales are, by extracting the json-file from the tar-ball
         # instead of getting it from the server
         extract_locales_file || return 1
-        curr_content=$(locales_parse_file "$LOCALE_FILE") || exit 1
+        curr_content=$(locales_parse_file "$FF_LOCALE_FILE") || exit 1
       else 
         # We can't know what the locales are in the current version
         return 1
@@ -318,9 +329,33 @@ fi
 
 if [ $LOCALES_CHANGED -ne 0 ]; then
   # l10n
-  echo "fetching locales..."
-  test ! -d l10n && mkdir l10n
-  jq -r 'to_entries[]| "\(.key) \(.value|.revision)"' $LOCALE_FILE | \
+  FINAL_L10N_BASE="l10n"
+  FF_L10N_BASE="l10n" # Only change this in TB-builds to a separate dir
+  TB_L10N_BASE="l10n_tb"
+  
+  # If we are doing Thunderbird, we'll have to checkout both TB and FF l10n-repos
+  # Thunderbird has one single mono-repo, FF has one for each language
+  if [ "$PRODUCT" = "thunderbird" ]; then
+    echo "Fetching Thunderbird locales..."
+    if [ -d "$TB_L10N_BASE/.hg" ]; then
+      pushd "$TB_L10N_BASE/" || exit 1
+      hg pull || exit 1
+      popd || exit 1
+    else
+      hg clone "https://hg.mozilla.org/projects/comm-l10n/" "$TB_L10N_BASE/" || exit 1
+    fi
+    # Just using the first entry here, as all languages have the same changeset
+    tb_changeset=`jq -r 'to_entries[0]| "\(.key) \(.value|.revision)" | cut -d " " -f 2' $TB_LOCALE_FILE`
+    [ "$RELEASE_TAG" == "default" ] || hg -R "$TB_L10N_BASE/" up -C -r "$tb_changeset" || exit 1
+    FF_L10N_BASE="l10n_ff"
+  fi
+
+  test ! -d $FF_L10N_BASE && mkdir $FF_L10N_BASE
+  # No-op, if we are building FF:
+  test ! -d $FINAL_L10N_BASE && mkdir $FINAL_L10N_BASE
+
+  echo "Fetching Browser locales..."
+  jq -r 'to_entries[]| "\(.key) \(.value|.revision)"' $FF_LOCALE_FILE | \
     while read locale changeset ; do
       case $locale in
         ja-JP-mac|en-US)
@@ -328,14 +363,24 @@ if [ $LOCALES_CHANGED -ne 0 ]; then
         *)
           echo "reading changeset information for $locale"
           echo "fetching $locale changeset $changeset ..."
-          if [ -d "l10n/$locale/.hg" ]; then
-            pushd "l10n/$locale" || exit 1
-            hg pull
+          if [ -d "$FF_L10N_BASE/$locale/.hg" ]; then
+            pushd "$FF_L10N_BASE/$locale" || exit 1
+            hg pull || exit 1
             popd || exit 1
           else
-            hg clone "https://hg.mozilla.org/l10n-central/$locale" "l10n/$locale"
+            hg clone "https://hg.mozilla.org/l10n-central/$locale" "$FF_L10N_BASE/$locale" || exit 1
           fi
-          [ "$RELEASE_TAG" == "default" ] || hg -R "l10n/$locale" up -C -r "$changeset"
+          [ "$RELEASE_TAG" == "default" ] || hg -R "$FF_L10N_BASE/$locale" up -C -r "$changeset" || exit 1
+
+          # If we are doing TB, we have to merge both l10n-repos
+          if [ "$PRODUCT" = "thunderbird" ] && test -d "$TB_L10N_BASE/$locale/" ; then
+            # Copy over FF-files
+            cp -r $FF_L10N_BASE/$locale $FINAL_L10N_BASE/
+            # and override Thunderbird-specific ones
+            for tbdir in "calendar" "chat" "mail"; do
+              cp -r "$TB_L10N_BASE/$locale/$tbdir" "$FF_L10N_BASE/$locale/"
+            done
+          fi
           ;;
       esac
     done
@@ -346,7 +391,7 @@ if [ $LOCALES_CHANGED -ne 0 ]; then
   tar $compression -cf l10n-$VERSION$VERSION_SUFFIX.tar.xz \
   --exclude=.hgtags --exclude=.hgignore --exclude=.hg \
   $TB_TAR_FLAGS \
-  l10n
+  $FINAL_L10N_BASE
 elif [ -f "l10n-$PREV_VERSION$PREV_VERSION_SUFFIX.tar.xz" ]; then
   # Locales did not change, but the old tar-ball is in this directory
   # Simply rename it:
