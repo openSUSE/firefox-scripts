@@ -40,26 +40,25 @@ fi
 SOURCE_TARBALL="$PRODUCT-$VERSION$VERSION_SUFFIX.source.tar.xz"
 PREV_SOURCE_TARBALL="$PRODUCT-$PREV_VERSION$PREV_VERSION_SUFFIX.source.tar.xz"
 FTP_URL="https://ftp.mozilla.org/pub/$PRODUCT/releases/$VERSION$VERSION_SUFFIX/source"
-FTP_CANDIDATES_BASE_URL="https://ftp.mozilla.org/pub/$PRODUCT/candidates"
-# Make first letter of PRODCUT upper case
-PRODUCT_CAP="${PRODUCT^}"
-LOCALES_URL="https://product-details.mozilla.org/1.0/l10n/$PRODUCT_CAP"
-PRODUCT_URL="https://product-details.mozilla.org/1.0/$PRODUCT.json"
+FTP_CANDIDATES_BASE_URL="https://ftp.mozilla.org/pub/%s/candidates"
+LOCALES_URL="https://product-details.mozilla.org/1.0/l10n"
+PRODUCT_URL="https://product-details.mozilla.org/1.0"
 ALREADY_EXTRACTED_LOCALES_FILE=0
 # Exit script on CTRL+C
 trap "exit" INT
 
 function get_ftp_candidates_url() {
-  VERSION_WITH_SUFFIX="$1"
-  echo "$FTP_CANDIDATES_BASE_URL/$VERSION_WITH_SUFFIX-candidates"
+  CURR_PRODUCT="$1"
+  VERSION_WITH_SUFFIX="$2"
+  printf "$FTP_CANDIDATES_BASE_URL/$VERSION_WITH_SUFFIX-candidates" "$CURR_PRODUCT"
 }
 
 function check_tarball_source () {
   TARBALL=$1
   # Print out what is going to be done:
-  if [ -e $TARBALL ]; then
+  if [ -e "$TARBALL" ]; then
       echo "Reuse existing file"
-  elif wget --spider $FTP_URL/$TARBALL 2> /dev/null; then
+  elif wget --spider "$FTP_URL/$TARBALL" 2> /dev/null; then
       echo "Download file"
   else
       echo "Mercurial checkout"
@@ -68,7 +67,7 @@ function check_tarball_source () {
 
 function ask_cont_abort_question() {
   while true; do
-    read -p "$1 [(c)ontinue/(a)bort] " ca
+    read -r -p "$1 [(c)ontinue/(a)bort] " ca
     case $ca in
         [Cc]* ) return 0 ;;
         [Aa]* ) return 1 ;;
@@ -78,16 +77,16 @@ function ask_cont_abort_question() {
 }
 
 function check_for_binary() {
-  if ! test -x $1; then
+  if ! test -x "$1"; then
     echo "$1 is missing: execute zypper in $2"
     exit 5
   fi
 }
 
 function get_source_stamp() {
-  BUILD_ID="$1"
-  FTP_CANDIDATES_BASE_URL=$(get_ftp_candidates_url $VERSION$VERSION_SUFFIX)
-  FTP_CANDIDATES_JSON_SUFFIX="${BUILD_ID}/linux-x86_64/en-US/$PRODUCT-$VERSION$VERSION_SUFFIX.json"
+  CURR_BUILD_ID="$1"
+  FTP_CANDIDATES_BASE_URL=$(get_ftp_candidates_url "$PRODUCT" "$VERSION$VERSION_SUFFIX")
+  FTP_CANDIDATES_JSON_SUFFIX="${CURR_BUILD_ID}/linux-x86_64/en-US/$PRODUCT-$VERSION$VERSION_SUFFIX.json"
   BUILD_JSON=$(curl --silent --fail "$FTP_CANDIDATES_BASE_URL/$FTP_CANDIDATES_JSON_SUFFIX") || return 1;
   REV=$(echo "$BUILD_JSON" | jq .moz_source_stamp)
   SOURCE_REPO=$(echo "$BUILD_JSON" | jq .moz_source_repo)
@@ -107,38 +106,43 @@ function get_source_stamp() {
 
 function get_build_number() {
   LAST_FOUND=""
-  VERSION_WITH_SUFFIX="$1"
+  CURR_PRODUCT="$1"
+  VERSION_WITH_SUFFIX="$2"
+  CURR_FTP_BASE_URL=$(printf "$FTP_CANDIDATES_BASE_URL" "$CURR_PRODUCT")
 
-  BUILD_ID=$(curl --silent "$PRODUCT_URL" | jq -e '.["releases"] | .["'$PRODUCT-$VERSION_WITH_SUFFIX'"] | .["build_number"]')
+  CURR_BUILD_ID=$(curl --silent "$PRODUCT_URL/$CURR_PRODUCT.json" | jq -e '.["releases"] | .["'$CURR_PRODUCT-$VERSION_WITH_SUFFIX'"] | .["build_number"]')
 
   # Slow fall-back
   if [ $? -ne 0 ]; then
       echo "Build number not found in product URL, falling back to slow FTP-parsing." 1>&2
-      FTP_CANDIDATES_BASE_URL=$(get_ftp_candidates_url $VERSION_WITH_SUFFIX)
+      FTP_CANDIDATES_BASE_URL=$(get_ftp_candidates_url "$CURR_PRODUCT" "$VERSION_WITH_SUFFIX")
       # Unfortunately, locales-files are not associated to releases, but to builds.
       # And since we don't know which build was the final build, we grep them all from
       # the candidates-page, sort them and take the last one which should be the oldest
       # Error only if not even the first one exists
-      LAST_FOUND=$(curl --silent --fail "$FTP_CANDIDATES_BASE_URL/" | grep -o "build[0-9]*/" | sort | uniq | tail -n 1 | cut -d "/" -f 1)
+      LAST_FOUND=$(curl --silent --fail "$CURR_FTP_BASE_URL/" | grep -o "build[0-9]*/" | sort | uniq | tail -n 1 | cut -d "/" -f 1)
   else
-      LAST_FOUND="build$BUILD_ID"
+      LAST_FOUND="build$CURR_BUILD_ID"
   fi
 
   if [ "$LAST_FOUND" != "" ]; then
     echo "$LAST_FOUND"
     return 0
   else
-    echo "Error: Could not find build-number for Firefox $VERSION_WITH_SUFFIX !"  1>&2
+    echo "Error: Could not find build-number for $CURR_PRODUCT $VERSION_WITH_SUFFIX !"  1>&2
     return 1
   fi
 }
 
 
 function locales_get() {
-  TMP_VERSION="$1"
-  BUILD_ID="$2"
-  URL_TO_CHECK="${LOCALES_URL}-${TMP_VERSION}"
-  FINAL_URL="${URL_TO_CHECK}-${BUILD_ID}.json"
+  CURR_PRODUCT="$1"
+  TMP_VERSION="$2"
+  CURR_BUILD_ID="$3"
+  # Make first letter of CURR_PRODUCT upper case
+  CURR_PRODUCT_CAP="${CURR_PRODUCT^}"
+  URL_TO_CHECK="${LOCALES_URL}/${CURR_PRODUCT_CAP}-${TMP_VERSION}"
+  FINAL_URL="${URL_TO_CHECK}-${CURR_BUILD_ID}.json"
   if wget --quiet --spider "$FINAL_URL"; then
     echo "$FINAL_URL"
     return 0
@@ -178,16 +182,17 @@ function extract_locales_file() {
 }
 
 function locales_unchanged() {
-  BUILD_ID="$1"
-  PREV_BUILD_ID=$(get_build_number "$PREV_VERSION$PREV_VERSION_SUFFIX")
+  CURR_PRODUCT="$1"
+  CURR_BUILD_ID="$2"
+  PREV_BUILD_ID=$(get_build_number "$CURR_PRODUCT" "$PREV_VERSION$PREV_VERSION_SUFFIX")
   # If no json-file for one of the versions can be found, we say "they changed"
-  prev_url=$(locales_get "$PREV_VERSION$PREV_VERSION_SUFFIX" "$PREV_BUILD_ID") || return 1
+  prev_url=$(locales_get "$CURR_PRODUCT" "$PREV_VERSION$PREV_VERSION_SUFFIX" "$PREV_BUILD_ID") || return 1
   prev_content=$(locales_parse_url "$prev_url") || exit 1
 
-  curr_url=$(locales_get "$VERSION$VERSION_SUFFIX" "$BUILD_ID")
+  curr_url=$(locales_get "$CURR_PRODUCT" "$VERSION$VERSION_SUFFIX" "$CURR_BUILD_ID")
   if [ $? -ne 0 ]; then
     # We did not find a locales file upstream on the servers
-    if [ -e $SOURCE_TARBALL ]; then
+    if [ -e "$SOURCE_TARBALL" ]; then
         # We can find out what the locales are, by extracting the json-file from the tar-ball
         # instead of getting it from the server
         extract_locales_file || return 1
@@ -216,15 +221,25 @@ if (($? != 127)); then
 fi
 
 # Get ID 
-BUILD_ID=$(get_build_number "$VERSION$VERSION_SUFFIX")
+BUILD_ID=$(get_build_number "$PRODUCT" "$VERSION$VERSION_SUFFIX")
 
 if [ -z ${SKIP_LOCALES+x} ]; then
-  if [ "$PREV_VERSION" != "" ] && locales_unchanged "$BUILD_ID"; then
-    printf "%-40s: Did not change. Skipping.\n" "locales"
-    LOCALES_CHANGED=0
-  else
+  LOCALES_CHANGED=1
+  if [ "$PREV_VERSION" != "" ]; then
+    # If we have a previous version, check either FF or (TB and FF)
+    if [ "$PRODUCT" = "firefox" ]; then
+      locales_unchanged "$PRODUCT" "$BUILD_ID"
+    else
+      FF_BUILD_ID=$(get_build_number "firefox" "$VERSION$VERSION_SUFFIX")
+      locales_unchanged "$PRODUCT" "$BUILD_ID" && locales_unchanged "firefox" "$FF_BUILD_ID"
+    fi
+    LOCALES_CHANGED=$?
+  fi
+
+  if [ $LOCALES_CHANGED -eq 1 ]; then
     printf "%-40s: Need to download.\n" "locales"
-    LOCALES_CHANGED=1
+  else
+    printf "%-40s: Did not change. Skipping.\n" "locales"
   fi
 else 
   printf "%-40s: User forced skip (SKIP_LOCALES set)\n" "locales"
@@ -232,22 +247,22 @@ fi
 
 # Check what is going to be done and ask for consent
 for ff in $SOURCE_TARBALL $SOURCE_TARBALL.asc; do
-  printf "%-40s: %s\n" $ff "$(check_tarball_source $ff)"
+  printf "%-40s: %s\n" "$ff" "$(check_tarball_source $ff)"
 done
 
-$(ask_cont_abort_question "Is this ok?") || exit 0
+ask_cont_abort_question "Is this ok?" || exit 0
 
 # Try to download tar-ball from officiall mozilla-mirror
-if [ ! -e $SOURCE_TARBALL ]; then
-  wget https://ftp.mozilla.org/pub/$PRODUCT/releases/$VERSION$VERSION_SUFFIX/source/$SOURCE_TARBALL
+if [ ! -e "$SOURCE_TARBALL" ]; then
+  wget "https://ftp.mozilla.org/pub/$PRODUCT/releases/$VERSION$VERSION_SUFFIX/source/$SOURCE_TARBALL"
 fi
 # including signature
-if [ ! -e $SOURCE_TARBALL.asc ]; then
-  wget https://ftp.mozilla.org/pub/$PRODUCT/releases/$VERSION$VERSION_SUFFIX/source/$SOURCE_TARBALL.asc
+if [ ! -e "$SOURCE_TARBALL.asc" ]; then
+  wget "https://ftp.mozilla.org/pub/$PRODUCT/releases/$VERSION$VERSION_SUFFIX/source/$SOURCE_TARBALL.asc"
 fi
 
 # we might have an upstream archive already and can skip the checkout
-if [ -e $SOURCE_TARBALL ]; then
+if [ -e "$SOURCE_TARBALL" ]; then
   if [ -z ${SKIP_LOCALES+x} ] && [ $LOCALES_CHANGED -ne 0 ]; then
     extract_locales_file
   fi
@@ -257,8 +272,8 @@ else
   # so we have to actually check out the repo
 
   # mozilla
-  if [ -d $PRODUCT-$VERSION ]; then
-    pushd $PRODUCT-$VERSION || exit 1
+  if [ -d "$PRODUCT-$VERSION" ]; then
+    pushd "$PRODUCT-$VERSION" || exit 1
     _repourl=$(hg paths)
     case "$_repourl" in
       *$BRANCH*)
@@ -269,18 +284,18 @@ else
       * )
         echo "removing obsolete tree"
         popd || exit 1
-        rm -rf $PRODUCT-$VERSION
+        rm -rf "$PRODUCT-$VERSION"
         ;;
     esac
   fi
-  if [ ! -d $PRODUCT-$VERSION ]; then
+  if [ ! -d "$PRODUCT-$VERSION" ]; then
     echo "cloning new $BRANCH..."
-    hg clone https://hg.mozilla.org/$BRANCH $PRODUCT-$VERSION
+    hg clone "https://hg.mozilla.org/$BRANCH $PRODUCT-$VERSION"
     if [ "$PRODUCT" = "thunderbird" ]; then
-      hg clone https://hg.mozilla.org/releases/comm-$CHANNEL $PRODUCT-$VERSION/comm
+      hg clone "https://hg.mozilla.org/releases/comm-$CHANNEL" "$PRODUCT-$VERSION/comm"
     fi
   fi
-  pushd $PRODUCT-$VERSION || exit 1
+  pushd "$PRODUCT-$VERSION" || exit 1
 
   # parse out the Firefox-release tag for this Thunderbird-checkout
   if [ "$PRODUCT" = "thunderbird" ]; then
@@ -290,8 +305,8 @@ else
     FF_RELEASE_TAG="$RELEASE_TAG"
   fi
 
-  hg update --check $FF_RELEASE_TAG
-  [ "$FF_RELEASE_TAG" == "default" ] || hg update -r $FF_RELEASE_TAG
+  hg update --check "$FF_RELEASE_TAG"
+  [ "$FF_RELEASE_TAG" == "default" ] || hg update -r "$FF_RELEASE_TAG"
   # get repo and source stamp
   REV=$(hg -R . parent --template="{node|short}\n")
   SOURCE_REPO=$(hg showconfig paths.default 2>/dev/null | head -n1 | sed -e "s/^ssh:/https:/")
@@ -299,9 +314,9 @@ else
 
   if [ "$PRODUCT" = "thunderbird" ]; then
     pushd comm || exit 1
-    hg update --check $RELEASE_TAG
+    hg update --check "$RELEASE_TAG"
     popd || exit 1
-    rm -rf thunderbird-${VERSION}/{,comm/}other-licenses/7zstub
+    rm -rf thunderbird-"${VERSION}"/{,comm/}other-licenses/7zstub
   fi
   popd || exit 1
 
@@ -319,7 +334,7 @@ else
   echo "RELEASE_TIMESTAMP=$TIMESTAMP" >> "$TAR_STAMP"
 
   echo "creating archive..."
-  tar $compression -cf $PRODUCT-$VERSION$VERSION_SUFFIX.source.tar.xz --exclude=.hgtags --exclude=.hgignore --exclude=.hg --exclude=CVS $PRODUCT-$VERSION
+  tar $compression -cf "$PRODUCT-$VERSION$VERSION_SUFFIX.source.tar.xz" --exclude=.hgtags --exclude=.hgignore --exclude=.hg --exclude=CVS "$PRODUCT-$VERSION"
 fi
 
 if [ ! -z ${SKIP_LOCALES+x} ]; then
@@ -345,7 +360,7 @@ if [ $LOCALES_CHANGED -ne 0 ]; then
       hg clone "https://hg.mozilla.org/projects/comm-l10n/" "$TB_L10N_BASE/" || exit 1
     fi
     # Just using the first entry here, as all languages have the same changeset
-    tb_changeset=`jq -r 'to_entries[0]| "\(.key) \(.value|.revision)" | cut -d " " -f 2' $TB_LOCALE_FILE`
+    tb_changeset=$(jq -r 'to_entries[0]| "\(.key) \(.value|.revision)"' "$TB_LOCALE_FILE" | cut -d " " -f 2)
     [ "$RELEASE_TAG" == "default" ] || hg -R "$TB_L10N_BASE/" up -C -r "$tb_changeset" || exit 1
     FF_L10N_BASE="l10n_ff"
   fi
@@ -355,8 +370,8 @@ if [ $LOCALES_CHANGED -ne 0 ]; then
   test ! -d $FINAL_L10N_BASE && mkdir $FINAL_L10N_BASE
 
   echo "Fetching Browser locales..."
-  jq -r 'to_entries[]| "\(.key) \(.value|.revision)"' $FF_LOCALE_FILE | \
-    while read locale changeset ; do
+  jq -r 'to_entries[]| "\(.key) \(.value|.revision)"' "$FF_LOCALE_FILE" | \
+    while read -r locale changeset ; do
       case $locale in
         ja-JP-mac|en-US)
           ;;
@@ -375,7 +390,7 @@ if [ $LOCALES_CHANGED -ne 0 ]; then
           # If we are doing TB, we have to merge both l10n-repos
           if [ "$PRODUCT" = "thunderbird" ] && test -d "$TB_L10N_BASE/$locale/" ; then
             # Copy over FF-files
-            cp -r $FF_L10N_BASE/$locale $FINAL_L10N_BASE/
+            cp -r "$FF_L10N_BASE/$locale" "$FINAL_L10N_BASE/"
             # and override Thunderbird-specific ones
             for tbdir in "calendar" "chat" "mail"; do
               cp -r "$TB_L10N_BASE/$locale/$tbdir" "$FF_L10N_BASE/$locale/"
@@ -388,10 +403,10 @@ if [ $LOCALES_CHANGED -ne 0 ]; then
   if [ "$PRODUCT" = "thunderbird" ]; then
     TB_TAR_FLAGS="--exclude=browser --exclude=suite"
   fi
-  tar $compression -cf l10n-$VERSION$VERSION_SUFFIX.tar.xz \
+  tar $compression -cf "l10n-$VERSION$VERSION_SUFFIX.tar.xz" \
   --exclude=.hgtags --exclude=.hgignore --exclude=.hg \
-  $TB_TAR_FLAGS \
-  $FINAL_L10N_BASE
+  "$TB_TAR_FLAGS" \
+  "$FINAL_L10N_BASE"
 elif [ -f "l10n-$PREV_VERSION$PREV_VERSION_SUFFIX.tar.xz" ]; then
   # Locales did not change, but the old tar-ball is in this directory
   # Simply rename it:
@@ -399,10 +414,10 @@ elif [ -f "l10n-$PREV_VERSION$PREV_VERSION_SUFFIX.tar.xz" ]; then
   mv "l10n-$PREV_VERSION$PREV_VERSION_SUFFIX.tar.xz" "l10n-$VERSION$VERSION_SUFFIX.tar.xz"
 fi
 
-if [ -e $PREV_SOURCE_TARBALL ]; then
+if [ -e "$PREV_SOURCE_TARBALL" ]; then
     echo ""
     echo "Deleting old sources tarball $PREV_SOURCE_TARBALL"
-    $(ask_cont_abort_question "Is this ok?") || exit 0
+    ask_cont_abort_question "Is this ok?" || exit 0
     rm "$PREV_SOURCE_TARBALL"
     rm "$PREV_SOURCE_TARBALL.asc"
     # if old and new lang-tarball are there, delete the old one
