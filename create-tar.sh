@@ -35,6 +35,7 @@ if [ "$PRODUCT" = "firefox" ]; then
 else
   FF_LOCALE_FILE="thunderbird-$VERSION/browser/locales/l10n-changesets.json"
   TB_LOCALE_FILE="thunderbird-$VERSION/comm/mail/locales/l10n-changesets.json"
+  L10N_STRING_PATTERNS="thunderbird-$VERSION/python/l10n/tbxchannel/l10n_merge.py"
 fi
 
 SOURCE_TARBALL="$PRODUCT-$VERSION$VERSION_SUFFIX.source.tar.xz"
@@ -154,9 +155,9 @@ function locales_get() {
 
 function locales_parse_file() {
   FILE="$1"
-  cat "$FILE" | python -c "import json; import sys; \
+  python -c "import json; import sys; \
              print('\n'.join(['{} {}'.format(key, value['revision']) \
-                for key, value in sorted(json.load(sys.stdin).items())]));"
+                for key, value in sorted(json.load(sys.stdin).items())]));" < "$FILE" 
 }
 
 function locales_parse_url() {
@@ -171,7 +172,7 @@ function extract_locales_file() {
       # still need to extract the locale information from the archive
       echo "extract locale changesets"
       if [ "$PRODUCT" = "thunderbird" ]; then
-        tar -xf "$SOURCE_TARBALL" "$FF_LOCALE_FILE" "$TB_LOCALE_FILE"
+        tar -xf "$SOURCE_TARBALL" "$FF_LOCALE_FILE" "$TB_LOCALE_FILE" "$L10N_STRING_PATTERNS"
       else
         tar -xf "$SOURCE_TARBALL" "$FF_LOCALE_FILE"
       fi
@@ -206,6 +207,48 @@ function locales_unchanged() {
   fi
 
   diff -y --suppress-common-lines -d <(echo "$prev_content") <(echo "$curr_content")
+}
+
+function get_locales_directories() {
+  pattern="$1"
+
+  # This file contains a list of directories, upstream uses to build locales
+  # If it is there, use it. If not, default to all FF + 3 TB-dirs.
+  if [ -e "$L10N_STRING_PATTERNS" ]; then
+    python3 -c "import os; import sys; \
+               sys.path.append(os.path.dirname(\"$L10N_STRING_PATTERNS\")); \
+               from l10n_merge import $pattern; \
+               print(\" \".join([p.strip('*') for p in $pattern]));"
+  else
+    if [ "$pattern" = "GECKO_STRINGS_PATTERNS" ]; then
+      # Default of Firefox: Take all
+      echo "{lang}/"
+    else
+      # Default of Thunderbird: Take those 3 dirs
+      echo "{lang}/calendar/" "{lang}/chat/" "{lang}/mail/"
+    fi
+  fi
+}
+
+function create_and_copy_locales() {
+    locale="$1"
+    source_base="$2"
+    source_template="$3"
+    final_dest="$4"
+
+    # Replace {lang} with the actual language-basedir
+    for template in $source_template; do
+      locale_source=$(echo "$template" | sed "s|{lang}|./$source_base/$locale|g")
+      locale_dest=$(echo "$template" | sed "s|{lang}|./$final_dest/$locale|g")
+
+      # Create intermediary folders
+      for destdir in $locale_dest; do
+        mkdir -p "$destdir"
+      done
+    
+      # Copy over FF-files
+      cp -r "$locale_source"/* "$locale_dest"
+    done
 }
 
 # check required tools
@@ -369,6 +412,13 @@ if [ $LOCALES_CHANGED -ne 0 ]; then
   # No-op, if we are building FF:
   test ! -d $FINAL_L10N_BASE && mkdir $FINAL_L10N_BASE
 
+  # This is only relevant for Thunderbird-builds
+  # Here, the relevant directories we need to copy from FF and from TB
+  # are specified in a python-file in the tarball
+  # Is of form '{lang}/Foo/bar/ {lang}/Baz/bar/ ..'
+  ff_locale_template=$(get_locales_directories "GECKO_STRINGS_PATTERNS")
+  tb_locale_template=$(get_locales_directories "COMM_STRINGS_PATTERNS")
+
   echo "Fetching Browser locales..."
   jq -r 'to_entries[]| "\(.key) \(.value|.revision)"' "$FF_LOCALE_FILE" | \
     while read -r locale changeset ; do
@@ -389,19 +439,15 @@ if [ $LOCALES_CHANGED -ne 0 ]; then
 
           # If we are doing TB, we have to merge both l10n-repos
           if [ "$PRODUCT" = "thunderbird" ] && test -d "$TB_L10N_BASE/$locale/" ; then
-            # Copy over FF-files
-            cp -r "$FF_L10N_BASE/$locale" "$FINAL_L10N_BASE/"
-            # and override Thunderbird-specific ones
-            for tbdir in "calendar" "chat" "mail"; do
-              cp -r "$TB_L10N_BASE/$locale/$tbdir" "$FF_L10N_BASE/$locale/"
-            done
+            create_and_copy_locales "$locale" "$FF_L10N_BASE" "$ff_locale_template" "$FINAL_L10N_BASE"
+            create_and_copy_locales "$locale" "$TB_L10N_BASE" "$tb_locale_template" "$FINAL_L10N_BASE"
           fi
           ;;
       esac
     done
   echo "creating l10n archive..."
   if [ "$PRODUCT" = "thunderbird" ]; then
-    TB_TAR_FLAGS="--exclude=browser --exclude=suite"
+    TB_TAR_FLAGS="--exclude=suite"
   fi
   tar $compression -cf "l10n-$VERSION$VERSION_SUFFIX.tar.xz" \
   --exclude=.hgtags --exclude=.hgignore --exclude=.hg \
