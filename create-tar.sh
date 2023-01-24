@@ -77,8 +77,8 @@ function set_internal_variables() {
 }
 
 function get_ftp_candidates_url() {
-  CURR_PRODUCT="$1"
-  VERSION_WITH_SUFFIX="$2"
+  local CURR_PRODUCT="$1"
+  local VERSION_WITH_SUFFIX="$2"
   printf "$FTP_CANDIDATES_BASE_URL/$VERSION_WITH_SUFFIX-candidates" "$CURR_PRODUCT"
 }
 
@@ -89,8 +89,14 @@ function check_tarball_source () {
       echo "Reuse existing file"
   elif wget --spider "$FTP_URL/$TARBALL" 2> /dev/null; then
       echo "Download file"
-  else
-      echo "Mercurial checkout"
+  else 
+      local CANDIDATE_TARBALL_LOCATION=""
+      CANDIDATE_TARBALL_LOCATION="$(printf "%s/%s/source/%s" "$(get_ftp_candidates_url "$PRODUCT" "$VERSION$VERSION_SUFFIX")" "$BUILD_ID" "$TARBALL" )"
+      if wget --spider "$CANDIDATE_TARBALL_LOCATION" 2> /dev/null; then
+          echo "Download UNRELEASED candidate"
+      else
+          echo "Mercurial checkout"
+      fi
   fi
 }
 
@@ -134,17 +140,17 @@ function get_source_stamp() {
 }
 
 function get_build_number() {
-  LAST_FOUND=""
-  CURR_PRODUCT="$1"
-  VERSION_WITH_SUFFIX="$2"
-  CURR_FTP_BASE_URL=$(printf "$FTP_CANDIDATES_BASE_URL" "$CURR_PRODUCT")
-
+  local LAST_FOUND=""
+  local CURR_PRODUCT="$1"
+  local VERSION_WITH_SUFFIX="$2"
+  local CURR_BUILD_ID=""
+  local CURR_FTP_BASE_URL=""
   CURR_BUILD_ID=$(curl --silent "$PRODUCT_URL/$CURR_PRODUCT.json" | jq -e '.["releases"] | .["'$CURR_PRODUCT-$VERSION_WITH_SUFFIX'"] | .["build_number"]')
 
   # Slow fall-back
   if [ $? -ne 0 ]; then
       echo "Build number not found in product URL, falling back to slow FTP-parsing." 1>&2
-      FTP_CANDIDATES_BASE_URL=$(get_ftp_candidates_url "$CURR_PRODUCT" "$VERSION_WITH_SUFFIX")
+      CURR_FTP_BASE_URL=$(get_ftp_candidates_url "$CURR_PRODUCT" "$VERSION_WITH_SUFFIX")
       # Unfortunately, locales-files are not associated to releases, but to builds.
       # And since we don't know which build was the final build, we grep them all from
       # the candidates-page, sort them and take the last one which should be the oldest
@@ -312,15 +318,23 @@ function check_what_changed() {
   ask_cont_abort_question "Is this ok?" || exit 0
 }
 
+function download_release_or_candidate_file() {
+  local upstream_file="$1"
+  if [ -e "$upstream_file" ]; then
+    return;
+  fi
+
+  if ! wget --quiet --show-progress --progress=bar "$FTP_URL/$upstream_file"; then
+      local CANDIDATE_TARBALL_LOCATION=""
+      CANDIDATE_TARBALL_LOCATION="$(printf "%s/%s/source/%s" "$(get_ftp_candidates_url "$PRODUCT" "$VERSION$VERSION_SUFFIX")" "$BUILD_ID" "$upstream_file" )"
+      wget --quiet --show-progress --progress=bar "$CANDIDATE_TARBALL_LOCATION"
+  fi
+}
+
 function download_upstream_source_tarballs() {
   # Try to download tar-ball from officiall mozilla-mirror
-  if [ ! -e "$SOURCE_TARBALL" ]; then
-    wget "https://ftp.mozilla.org/pub/$PRODUCT/releases/$VERSION$VERSION_SUFFIX/source/$SOURCE_TARBALL"
-  fi
-  # including signature
-  if [ ! -e "$SOURCE_TARBALL.asc" ]; then
-    wget "https://ftp.mozilla.org/pub/$PRODUCT/releases/$VERSION$VERSION_SUFFIX/source/$SOURCE_TARBALL.asc"
-  fi
+  download_release_or_candidate_file "$SOURCE_TARBALL"
+  download_release_or_candidate_file "$SOURCE_TARBALL.asc"
 
   # we might have an upstream archive already and can skip the checkout
   if [ -e "$SOURCE_TARBALL" ]; then
