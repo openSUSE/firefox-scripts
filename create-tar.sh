@@ -16,10 +16,15 @@ function main() {
 
   set_internal_variables
 
-  check_what_changed
+  check_what_to_do_with_source_tarballs
   download_upstream_source_tarballs
 
-  create_locales_tarballs
+  if [ -z ${SKIP_LOCALES+x} ]; then
+    check_what_to_do_with_locales_tarballs
+    create_locales_tarballs
+  else 
+    printf "%-40s: User forced skip (SKIP_LOCALES set)\n" "locales"
+  fi
 }
 
 function print_usage_and_exit() {
@@ -119,13 +124,13 @@ function check_for_binary() {
 }
 
 function get_source_stamp() {
-  CURR_BUILD_ID="$1"
-  FTP_CANDIDATES_BASE_URL=$(get_ftp_candidates_url "$PRODUCT" "$VERSION$VERSION_SUFFIX")
-  FTP_CANDIDATES_JSON_SUFFIX="${CURR_BUILD_ID}/linux-x86_64/en-US/$PRODUCT-$VERSION$VERSION_SUFFIX.json"
-  BUILD_JSON=$(curl --silent --fail "$FTP_CANDIDATES_BASE_URL/$FTP_CANDIDATES_JSON_SUFFIX") || return 1;
-  REV=$(echo "$BUILD_JSON" | jq .moz_source_stamp)
-  SOURCE_REPO=$(echo "$BUILD_JSON" | jq .moz_source_repo)
-  TIMESTAMP=$(echo "$BUILD_JSON" | jq .buildid)
+  local CURR_BUILD_ID="$1"
+  local FTP_CANDIDATES_BASE_URL=$(get_ftp_candidates_url "$PRODUCT" "$VERSION$VERSION_SUFFIX")
+  local FTP_CANDIDATES_JSON_SUFFIX="${CURR_BUILD_ID}/linux-x86_64/en-US/$PRODUCT-$VERSION$VERSION_SUFFIX.json"
+  local BUILD_JSON=$(curl --silent --fail "$FTP_CANDIDATES_BASE_URL/$FTP_CANDIDATES_JSON_SUFFIX") || return 1;
+  local REV=$(echo "$BUILD_JSON" | jq .moz_source_stamp)
+  local SOURCE_REPO=$(echo "$BUILD_JSON" | jq .moz_source_repo)
+  local TIMESTAMP=$(echo "$BUILD_JSON" | jq .buildid)
   echo "Extending $TAR_STAMP with:"
   echo "RELEASE_REPO=${SOURCE_REPO}"
   echo "RELEASE_TAG=${REV}"
@@ -170,9 +175,9 @@ function get_build_number() {
 }
 
 function locales_get() {
-  CURR_PRODUCT="$1"
-  TMP_VERSION="$2"
-  CURR_BUILD_ID="$3"
+  local CURR_PRODUCT="$1"
+  local TMP_VERSION="$2"
+  local CURR_BUILD_ID="$3"
   # Make first letter of CURR_PRODUCT upper case
   CURR_PRODUCT_CAP="${CURR_PRODUCT^}"
   URL_TO_CHECK="${LOCALES_URL}/${CURR_PRODUCT_CAP}-${TMP_VERSION}"
@@ -216,9 +221,9 @@ function extract_locales_file() {
 }
 
 function locales_unchanged() {
-  CURR_PRODUCT="$1"
-  CURR_BUILD_ID="$2"
-  PREV_BUILD_ID=$(get_build_number "$CURR_PRODUCT" "$PREV_VERSION$PREV_VERSION_SUFFIX")
+  local CURR_PRODUCT="$1"
+  local CURR_BUILD_ID="$2"
+  local PREV_BUILD_ID=$(get_build_number "$CURR_PRODUCT" "$PREV_VERSION$PREV_VERSION_SUFFIX")
   # If no json-file for one of the versions can be found, we say "they changed"
   prev_url=$(locales_get "$CURR_PRODUCT" "$PREV_VERSION$PREV_VERSION_SUFFIX" "$PREV_BUILD_ID") || return 1
   prev_content=$(locales_parse_url "$prev_url") || exit 1
@@ -284,31 +289,9 @@ function create_and_copy_locales() {
     done
 }
 
-function check_what_changed() {
+function check_what_to_do_with_source_tarballs() {
   # Get ID 
   BUILD_ID=$(get_build_number "$PRODUCT" "$VERSION$VERSION_SUFFIX")
-
-  if [ -z ${SKIP_LOCALES+x} ]; then
-    LOCALES_CHANGED=1
-    if [ "$PREV_VERSION" != "" ]; then
-      # If we have a previous version, check either FF or (TB and FF)
-      if [ "$PRODUCT" = "firefox" ]; then
-        locales_unchanged "$PRODUCT" "$BUILD_ID"
-      else
-        FF_BUILD_ID=$(get_build_number "firefox" "$VERSION$VERSION_SUFFIX")
-        locales_unchanged "$PRODUCT" "$BUILD_ID" && locales_unchanged "firefox" "$FF_BUILD_ID"
-      fi
-      LOCALES_CHANGED=$?
-    fi
-
-    if [ $LOCALES_CHANGED -eq 1 ]; then
-      printf "%-40s: Need to download.\n" "locales"
-    else
-      printf "%-40s: Did not change. Skipping.\n" "locales"
-    fi
-  else 
-    printf "%-40s: User forced skip (SKIP_LOCALES set)\n" "locales"
-  fi
 
   # Check what is going to be done and ask for consent
   for ff in $SOURCE_TARBALL $SOURCE_TARBALL.asc; do
@@ -316,6 +299,32 @@ function check_what_changed() {
   done
 
   ask_cont_abort_question "Is this ok?" || exit 0
+}
+
+function check_what_to_do_with_locales_tarballs() {
+  LOCALES_CHANGED=1
+
+  extract_locales_file
+
+  if [ "$PREV_VERSION" != "" ]; then
+    # If we have a previous version, check either FF or (TB and FF)
+    if [ "$PRODUCT" = "firefox" ]; then
+      locales_unchanged "$PRODUCT" "$BUILD_ID"
+    else
+      FF_BUILD_ID=$(get_build_number "firefox" "$VERSION$VERSION_SUFFIX")
+      locales_unchanged "$PRODUCT" "$BUILD_ID" && locales_unchanged "firefox" "$FF_BUILD_ID"
+    fi
+    LOCALES_CHANGED=$?
+  fi
+
+  # New line for better visibility
+  echo ""
+  if [ $LOCALES_CHANGED -eq 1 ]; then
+    printf "%-40s: Need to download.\n" "locales"
+    ask_cont_abort_question "Is this ok?" || exit 0
+  else
+    printf "%-40s: Did not change. Skipping.\n" "locales"
+  fi
 }
 
 function download_release_or_candidate_file() {
@@ -338,9 +347,6 @@ function download_upstream_source_tarballs() {
 
   # we might have an upstream archive already and can skip the checkout
   if [ -e "$SOURCE_TARBALL" ]; then
-    if [ -z ${SKIP_LOCALES+x} ] && [ $LOCALES_CHANGED -ne 0 ]; then
-      extract_locales_file
-    fi
     get_source_stamp "$BUILD_ID"
   else
     # We are working on a version that is not yet published on the mozilla mirror
@@ -386,9 +392,9 @@ function clone_and_repackage_sources() {
   hg update --check "$FF_RELEASE_TAG"
   [ "$FF_RELEASE_TAG" == "default" ] || hg update -r "$FF_RELEASE_TAG"
   # get repo and source stamp
-  REV=$(hg -R . parent --template="{node|short}\n")
-  SOURCE_REPO=$(hg showconfig paths.default 2>/dev/null | head -n1 | sed -e "s/^ssh:/https:/")
-  TIMESTAMP=$(date +%Y%m%d%H%M%S)
+  local REV=$(hg -R . parent --template="{node|short}\n")
+  local SOURCE_REPO=$(hg showconfig paths.default 2>/dev/null | head -n1 | sed -e "s/^ssh:/https:/")
+  local TIMESTAMP=$(date +%Y%m%d%H%M%S)
 
   if [ "$PRODUCT" = "thunderbird" ]; then
     pushd comm || exit 1
@@ -413,6 +419,7 @@ function clone_and_repackage_sources() {
 
   echo "creating archive..."
   tar "$compression" -cf "$PRODUCT-$VERSION$VERSION_SUFFIX.source.tar.xz" --exclude=.hgtags --exclude=.hgignore --exclude=.hg --exclude=CVS "$PRODUCT-$VERSION"
+  ALREADY_EXTRACTED_LOCALES_FILE=1
 }
 
 function create_locales_tarballs() {
@@ -420,7 +427,7 @@ function create_locales_tarballs() {
     echo "Skipping locales-creation."
     exit 0
   fi
-  
+
   if [ "$LOCALES_CHANGED" -ne 0 ]; then
     clone_and_repackage_locales
   elif [ -f "l10n-$PREV_VERSION$PREV_VERSION_SUFFIX.tar.xz" ]; then
