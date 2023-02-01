@@ -25,6 +25,8 @@ function main() {
   else 
     printf "%-40s: User forced skip (SKIP_LOCALES set)\n" "locales"
   fi
+
+  clean_up_old_tarballs
 }
 
 function print_usage_and_exit() {
