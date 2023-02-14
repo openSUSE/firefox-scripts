@@ -501,7 +501,7 @@ function clone_and_repackage_locales() {
       esac
     done
   echo "creating l10n archive..."
-  local TAR_FLAGS="--exclude=.hgtags --exclude=.hgignore --exclude=.hg"
+  local TAR_FLAGS="--exclude=.hgtags --exclude=.hgignore --exclude=.hg --exclude=CVS"
   if [ "$PRODUCT" = "thunderbird" ]; then
     TAR_FLAGS="$TAR_FLAGS --exclude=suite"
   fi
