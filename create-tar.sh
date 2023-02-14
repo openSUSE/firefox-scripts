@@ -100,7 +100,7 @@ function check_tarball_source () {
       local CANDIDATE_TARBALL_LOCATION=""
       CANDIDATE_TARBALL_LOCATION="$(printf "%s/%s/source/%s" "$(get_ftp_candidates_url "$PRODUCT" "$VERSION$VERSION_SUFFIX")" "$BUILD_ID" "$TARBALL" )"
       if wget --spider "$CANDIDATE_TARBALL_LOCATION" 2> /dev/null; then
-          echo "Download UNRELEASED candidate"
+          echo "Download UNRELEASED candidate ($BUILD_ID)"
       else
           echo "Mercurial checkout"
       fi
@@ -501,13 +501,11 @@ function clone_and_repackage_locales() {
       esac
     done
   echo "creating l10n archive..."
+  local TAR_FLAGS="--exclude=.hgtags --exclude=.hgignore --exclude=.hg"
   if [ "$PRODUCT" = "thunderbird" ]; then
-    TB_TAR_FLAGS="--exclude=suite"
+    TAR_FLAGS="$TAR_FLAGS --exclude=suite"
   fi
-  tar "$compression" -cf "l10n-$VERSION$VERSION_SUFFIX.tar.xz" \
-  --exclude=.hgtags --exclude=.hgignore --exclude=.hg \
-  "$TB_TAR_FLAGS" \
-  "$FINAL_L10N_BASE"
+  tar "$compression" -cf "l10n-$VERSION$VERSION_SUFFIX.tar.xz" "$TAR_FLAGS" "$FINAL_L10N_BASE"
 }
 
 function clean_up_old_tarballs() {
