@@ -420,7 +420,7 @@ function clone_and_repackage_sources() {
   echo "RELEASE_TIMESTAMP=$TIMESTAMP" >> "$TAR_STAMP"
 
   echo "creating archive..."
-  tar "$compression" -cf "$PRODUCT-$VERSION$VERSION_SUFFIX.source.tar.xz" --exclude=.hgtags --exclude=.hgignore --exclude=.hg --exclude=CVS "$PRODUCT-$VERSION"
+  tar "$compression" -cf "$PRODUCT-$VERSION$VERSION_SUFFIX.source.tar.xz" --exclude-vcs "$PRODUCT-$VERSION"
   ALREADY_EXTRACTED_LOCALES_FILE=1
 }
 
@@ -501,7 +501,7 @@ function clone_and_repackage_locales() {
       esac
     done
   echo "creating l10n archive..."
-  local TAR_FLAGS="--exclude=.hgtags --exclude=.hgignore --exclude=.hg --exclude=CVS"
+  local TAR_FLAGS="--exclude-vcs"
   if [ "$PRODUCT" = "thunderbird" ]; then
     TAR_FLAGS="$TAR_FLAGS --exclude=suite"
   fi
