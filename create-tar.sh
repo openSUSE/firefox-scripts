@@ -71,7 +71,9 @@ function set_internal_variables() {
   else
     FF_LOCALE_FILE="thunderbird-$VERSION/browser/locales/l10n-changesets.json"
     TB_LOCALE_FILE="thunderbird-$VERSION/comm/mail/locales/l10n-changesets.json"
-    L10N_STRING_PATTERNS="thunderbird-$VERSION/python/l10n/tbxchannel/l10n_merge.py"
+    FF_PREV_LOCALE_FILE="thunderbird-$PREV_VERSION/browser/locales/l10n-changesets.json"
+    TB_PREV_LOCALE_FILE="thunderbird-$PREV_VERSION/comm/mail/locales/l10n-changesets.json"
+    L10N_STRING_PATTERNS="thunderbird-$VERSION/comm/python/l10n/tbxchannel/l10n_merge.py"
   fi
 
   SOURCE_TARBALL="$PRODUCT-$VERSION$VERSION_SUFFIX.source.tar.xz"
@@ -313,8 +315,23 @@ function check_what_to_do_with_locales_tarballs() {
     if [ "$PRODUCT" = "firefox" ]; then
       locales_unchanged "$PRODUCT" "$BUILD_ID"
     else
-      FF_BUILD_ID=$(get_build_number "firefox" "$VERSION$VERSION_SUFFIX")
-      locales_unchanged "$PRODUCT" "$BUILD_ID" && locales_unchanged "firefox" "$FF_BUILD_ID"
+      # Currently, upstream 'forgets' which Firefox-locales get used for which Thunderbird-release upon release
+      # so, instead of parsing upstream JSON-files, we rely on the previous tarball being there and comparing
+      # the lang-files directly
+      # FF_BUILD_ID=$(get_build_number "firefox" "$VERSION$VERSION_SUFFIX")
+      # locales_unchanged "$PRODUCT" "$BUILD_ID" && locales_unchanged "firefox" "$FF_BUILD_ID"
+      if [ -e "$PREV_SOURCE_TARBALL" ]; then 
+        echo "extract previous locale changesets"
+        tar -xf "$PREV_SOURCE_TARBALL" "$FF_PREV_LOCALE_FILE" "$TB_PREV_LOCALE_FILE"
+
+        curr_ff_content=$(locales_parse_file "$FF_LOCALE_FILE") || exit 1
+        prev_ff_content=$(locales_parse_file "$FF_PREV_LOCALE_FILE") || exit 1
+        curr_tb_content=$(locales_parse_file "$TB_LOCALE_FILE") || exit 1
+        prev_tb_content=$(locales_parse_file "$TB_PREV_LOCALE_FILE") || exit 1
+
+        diff -y --suppress-common-lines -d <(echo "$prev_ff_content") <(echo "$curr_ff_content") ||
+        diff -y --suppress-common-lines -d <(echo "$prev_tb_content") <(echo "$curr_tb_content")
+      fi
     fi
     LOCALES_CHANGED=$?
   fi
