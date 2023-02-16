@@ -522,7 +522,7 @@ function clone_and_repackage_locales() {
   if [ "$PRODUCT" = "thunderbird" ]; then
     TAR_FLAGS="$TAR_FLAGS --exclude=suite"
   fi
-  tar "$compression" -cf "l10n-$VERSION$VERSION_SUFFIX.tar.xz" "$TAR_FLAGS" "$FINAL_L10N_BASE"
+  tar "$compression" -cf "l10n-$VERSION$VERSION_SUFFIX.tar.xz" $TAR_FLAGS "$FINAL_L10N_BASE"
 }
 
 function clean_up_old_tarballs() {
