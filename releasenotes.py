@@ -6,6 +6,22 @@ import sys
 import re
 import textwrap
 
+# From https://gist.github.com/pypt/94d747fe5180851196eb
+# because the yaml-module ignores duplicate keys and
+# silently overwrites them, making us loose advisories
+# if, e.g. no CVE-number has yet been issued.
+class UniqueKeyLoader(yaml.SafeLoader):
+    def construct_mapping(self, node, deep=False):
+        mapping = set()
+        for key_node, value_node in node.value:
+            if ':merge' in key_node.tag:
+                continue
+            key = self.construct_object(key_node, deep=deep)
+            if key in mapping:
+                raise ValueError(f"Duplicate {key!r} key found in YAML.")
+            mapping.add(key)
+        return super().construct_mapping(node, deep)
+
 wrapBMO = textwrap.TextWrapper(
     initial_indent = "  ",
     subsequent_indent = "    ",
@@ -25,7 +41,8 @@ def print_json_release_notes(json_data):
 
 
 def print_yml_file(file_data, bsc):
-    yaml_data = yaml.safe_load(file_data)
+    # yaml_data = yaml.safe_load(file_data)
+    yaml_data = yaml.load(file_data, Loader=UniqueKeyLoader)
     if "release" in yaml_data:
         print_release_notes(yaml_data)
     else:
