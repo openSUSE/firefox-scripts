@@ -4,7 +4,7 @@ import requests
 
 def get_json_data(package):
     url = f"https://smelt.suse.de/api/v1/basic/maintainedpackage/"
-    res = requests.get(url, params={"package": package}).json()
+    res = requests.get(url, params={"package": package}, verify="/etc/ssl/certs/SUSE_Trust_Root.pem").json()
     if res == {}:
         raise ValueError(f"Unmaintained package {package}")
 
