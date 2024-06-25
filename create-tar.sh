@@ -511,8 +511,7 @@ function clone_and_repackage_locales() {
   echo "Fetching Browser locales..."
   if [ -d "$FF_L10N_BASE/.git" ]; then
     pushd "$FF_L10N_BASE/" || exit 1
-    git switch main || exit 1
-    git pull || exit 1
+    git fetch -a || exit 1
     popd || exit 1
   else
     git clone "$FF_L10N_MONOREPO" "$FF_L10N_BASE" || exit 1
