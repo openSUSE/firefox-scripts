@@ -138,7 +138,7 @@ function get_source_stamp() {
   local BUILD_JSON=$(curl --silent --fail "$FTP_CANDIDATES_BASE_URL/$FTP_CANDIDATES_JSON_SUFFIX") || return 1;
   local REV=$(echo "$BUILD_JSON" | jq .moz_source_stamp)
   local SOURCE_REPO=$(echo "$BUILD_JSON" | jq .moz_source_repo)
-  local TIMESTAMP=$(echo "$BUILD_JSON" | jq .buildid)
+  TIMESTAMP=$(echo "$BUILD_JSON" | jq .buildid)
   echo "Extending $TAR_STAMP with:"
   echo "RELEASE_REPO=${SOURCE_REPO}"
   echo "RELEASE_TAG=${REV}"
@@ -429,7 +429,7 @@ function clone_and_repackage_sources() {
   # get repo and source stamp
   local REV=$(hg -R . parent --template="{node|short}\n")
   local SOURCE_REPO=$(hg showconfig paths.default 2>/dev/null | head -n1 | sed -e "s/^ssh:/https:/")
-  local TIMESTAMP=$(date +%Y%m%d%H%M%S)
+  TIMESTAMP=$(date +%Y%m%d%H%M%S)
 
   if [ "$PRODUCT" = "thunderbird" ]; then
     pushd comm || exit 1
@@ -540,6 +540,11 @@ function clone_and_repackage_locales() {
 
   echo "creating l10n archive..."
   local TAR_FLAGS="--exclude-vcs"
+  # For reproducable tarballs
+  # Convert TIMESTAMP to ISO-format, so tar can understand it, then set mtime to it
+  local MTIME=$(python3 -c "from datetime import datetime; print(datetime.strptime(${TIMESTAMP}, '%Y%m%d%H%M%S').isoformat())")
+  TAR_FLAGS="$TAR_FLAGS --sort=name --format=posix --pax-option=delete=atime,delete=ctime,exthdr.name=%d/PaxHeaders/%f --numeric-owner --owner=0 --group=0 --mode=go+u,go-w --clamp-mtime --mtime=$MTIME"
+
   if [ "$PRODUCT" = "thunderbird" ]; then
     TAR_FLAGS="$TAR_FLAGS --exclude=suite"
   fi
