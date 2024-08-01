@@ -85,6 +85,7 @@ function set_internal_variables() {
   FTP_CANDIDATES_BASE_URL="https://ftp.mozilla.org/pub/%s/candidates"
   LOCALES_URL="https://product-details.mozilla.org/1.0/l10n"
   FF_L10N_MONOREPO="https://github.com/mozilla-l10n/firefox-l10n"
+  TB_L10N_MONOREPO="https://github.com/thunderbird/thunderbird-l10n"
   PRODUCT_URL="https://product-details.mozilla.org/1.0"
   ALREADY_EXTRACTED_LOCALES_FILE=0
 }
@@ -480,7 +481,12 @@ function create_locales_tarballs() {
 
 function clone_and_repackage_locales() {
   # l10n
-  FINAL_L10N_BASE="l10n"
+  if [ "$PRODUCT" = "thunderbird" ]; then
+    FINAL_L10N_BASE="l10n-central"
+  else
+    FINAL_L10N_BASE="l10n"
+  fi
+
   FF_L10N_BASE="l10n" # Only change this in TB-builds to a separate dir
   TB_L10N_BASE="l10n_tb"
 
@@ -488,16 +494,16 @@ function clone_and_repackage_locales() {
   # Thunderbird has one single mono-repo, FF has one for each language
   if [ "$PRODUCT" = "thunderbird" ]; then
     echo "Fetching Thunderbird locales..."
-    if [ -d "$TB_L10N_BASE/.hg" ]; then
+    if [ -d "$TB_L10N_BASE/.git" ]; then
       pushd "$TB_L10N_BASE/" || exit 1
-      hg pull || exit 1
+      git fetch -a || exit 1
       popd || exit 1
     else
-      hg clone "https://hg.mozilla.org/projects/comm-l10n/" "$TB_L10N_BASE/" || exit 1
+      git clone "$TB_L10N_MONOREPO" "$TB_L10N_BASE/" || exit 1
     fi
     # Just using the first entry here, as all languages have the same changeset
     tb_changeset=$(jq -r 'to_entries[0]| "\(.key) \(.value|.revision)"' "$TB_LOCALE_FILE" | cut -d " " -f 2)
-    [ "$RELEASE_TAG" == "default" ] || hg -R "$TB_L10N_BASE/" up -C -r "$tb_changeset" || exit 1
+    [ "$RELEASE_TAG" == "default" ] || git -C "$TB_L10N_BASE/" switch --detach "$tb_changeset" || exit 1
     FF_L10N_BASE="l10n_ff"
   fi
 
