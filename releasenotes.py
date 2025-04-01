@@ -60,23 +60,29 @@ def print_release_notes(notes):
             continue
 
         content = note["note"]
-        if "bug" in note and note["bug"] != "":
+        if "bug" in note and (note["bug"] != "" and note["bug"] != None):
             content += " (bmo#{0})".format(note["bug"])
 
         # thunderbird
-        if "bugs" in note and note["bugs"] != "":
+        if "bugs" in note and (note["bugs"] != "" and note["bugs"] != None):
             content += " ("
             content += ",".join([ "bmo#{0}".format(bug) for bug in note["bugs"] ])
             content += ")"
 
         # Replacing ([bug 1234123][0]) with [bmo#1234123]:
-        content = re.sub("\(\[bug (?P<ID>[0-9]+)\]\[[0-9]+\]\)", "(bmo#\g<ID>)", content)
+        content = re.sub("\\(\\[[b,B]ug (?P<ID>[0-9]+)\\]\\[[0-9]+\\]\\)", "(bmo#\\g<ID>)", content)
+
+        # Replacing <a href="https://bugzilla.mozilla.org/1234123">1234123</a> with "bmo#1234123"
+        content = re.sub("<a href=\"https://bugzilla.mozilla.org/(?P<ID>[0-9]+)\">.*</a>", "bmo#\\g<ID>", content)
 
         # Replacing [something with a link][1] with "something with a link"
-        content = re.sub("\[(?P<text>[^\]]+)\]\[\d+\]", "\g<text>", content)
+        content = re.sub("\\[(?P<text>[^\\]]+)\\]\\[\\d+\\]", "\\g<text>", content)
 
         # Replacing [something with a link](http:...) with "something with a link"
-        content = re.sub("\[(?P<text>[^\]]+)\]\((?P<link>[^\)]+)\)", "\g<text>", content)
+        content = re.sub("\\[(?P<text>[^\\]]+)\\]\\((?P<link>[^\\)]+)\\)", "\\g<text>", content)
+
+        # Remove embedded images such as <img src="$FOO" width="700" alt="$TEXT">
+        content = re.sub("<img src=.*>", "", content)
 
         contentlines = content.splitlines()
         print(wrapBMO.fill("* {0}: {1}".format(note["tag"], contentlines[0])))
@@ -89,7 +95,7 @@ def print_release_notes(notes):
                 continue
 
             # Skip URL-links
-            if linestrip.startswith("[") and linestrip[1].isnumeric() and "]: https:" in line:
+            if linestrip.startswith("[") and linestrip[1].isnumeric() and ("]: https:" in line or "]:https:" in line):
                 continue
 
             print(wrapCHLOG.fill("{0}".format(line)))
