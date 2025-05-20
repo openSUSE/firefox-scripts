@@ -597,7 +597,7 @@ function update_key_file() {
       echo "Keyring changed. Updating it."
       echo "$UPSTREAM_KEYFILE" > mozilla.keyring
     else
-      echo "Keyring did not changed."
+      echo "Keyring did not change."
     fi
   else
     echo "No local keyring found. Skipping keyring-check."
